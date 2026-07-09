@@ -33,16 +33,20 @@ Sistema simples e leve para registrar sua árvore genealógica, com fotos e docu
    chmod -R 755 public/uploads
    ```
 
-4. **Rodar o servidor**
+4. **Configurar o nginx**
 
-   Para testar localmente sem Apache/Nginx:
+   Use `nginx.conf.example` como base. O ponto importante é que o `root` do site aponte para a pasta `public/` (nunca para a raiz do projeto), e que exista um bloco bloqueando execução de `.php` dentro de `/uploads/` — isso substitui o `.htaccess` (que só funciona em Apache).
+
+5. **Rodar o servidor**
+
+   Para testar localmente sem nginx configurado:
    ```bash
    cd public
    php -S localhost:8000
    ```
    Acesse: http://localhost:8000
 
-   Em produção, aponte o DocumentRoot do Apache/Nginx para a pasta `public/`.
+   Em produção, use o nginx apontando para `public/` conforme `nginx.conf.example`.
 
 ## Estrutura do projeto
 
@@ -55,13 +59,16 @@ arvore-familiar/
 ├── includes/
 │   ├── auth.php             # Login, registro, sessão
 │   └── functions.php        # CRUD de pessoas, relações, mídias
-├── public/                  # Raiz pública do site
+├── public/                  # Raiz pública do site (aponte o nginx para cá)
 │   ├── index.php             # Listagem de pessoas
 │   ├── login.php / registro.php / logout.php
 │   ├── pessoa.php            # Perfil da pessoa + relações + mídias
 │   ├── pessoa_editar.php     # Criar/editar pessoa
+│   ├── arvore.php            # Visualização gráfica da árvore (D3.js)
+│   ├── arvore_dados.php      # Endpoint JSON consumido pela árvore
 │   ├── css/style.css
 │   └── uploads/               # Fotos e documentos enviados
+├── nginx.conf.example       # Configuração de referência para nginx
 └── README.md
 ```
 
@@ -74,9 +81,12 @@ arvore-familiar/
    - Fazer upload de fotos e documentos (certidões, escrituras etc.)
    - Editar dados biográficos e biografia livre
 
+## Visualização da árvore
+
+A página `arvore.php` desenha a árvore genealógica completa usando D3.js (carregado via CDN no navegador). Cada pessoa é posicionada por geração (calculada automaticamente a partir das relações pai/mãe → filho), com cônjuges no mesmo nível. Linhas verdes sólidas indicam filiação; linhas laranja tracejadas indicam uniões/casamentos. Você pode arrastar os nós, dar zoom e clicar em qualquer pessoa para abrir seu perfil.
+
 ## Próximos passos sugeridos (não incluídos nesta versão inicial)
 
-- **Visualização gráfica da árvore** (hoje a navegação é por links entre perfis — funcional, mas não é uma árvore visual). Pode ser adicionada com D3.js ou a biblioteca `family-chart`, consumindo os dados via um endpoint JSON.
 - **Importação/exportação GEDCOM**, caso queira migrar dados de/para o MyHeritage no futuro.
 - **Controle de permissões por usuário**, caso queira restringir quem edita o quê (hoje todo usuário logado pode editar tudo).
 - **Linha do tempo de eventos** (a tabela `eventos` já existe no schema, mas ainda não tem interface).
@@ -85,5 +95,5 @@ arvore-familiar/
 
 - Senhas são armazenadas com `password_hash()` (bcrypt).
 - Todas as queries usam prepared statements (PDO) contra SQL injection.
-- A pasta `uploads/` bloqueia execução de PHP via `.htaccess`.
+- A pasta `uploads/` bloqueia execução de PHP via configuração do nginx (veja `nginx.conf.example`) — **não** use `.htaccess`, que é ignorado pelo nginx.
 - Recomenda-se rodar atrás de HTTPS em produção.

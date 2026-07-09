@@ -17,6 +17,7 @@ $pessoas = listarPessoas($busca);
 <header class="topo">
     <a href="index.php">🌳 Árvore Familiar</a>
     <nav>
+        <a href="arvore.php">Ver árvore</a>
         <span>Olá, <?= htmlspecialchars(usuarioAtualNome()) ?></span>
         <a href="logout.php">Sair</a>
     </nav>

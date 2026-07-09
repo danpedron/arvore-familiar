@@ -1,0 +1,33 @@
+# Exemplo de configuração de site nginx para o projeto Árvore Familiar
+# Ajuste os caminhos e a versão do PHP-FPM conforme seu servidor.
+
+server {
+    listen 80;
+    server_name arvore.exemplo.com;
+
+    root /var/www/arvore-familiar/public;
+    index index.php;
+
+    # Bloqueia execução de PHP dentro da pasta de uploads
+    # (equivalente ao .htaccess usado em Apache)
+    location ^~ /uploads/ {
+        location ~ \.php$ {
+            deny all;
+        }
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock; # ajuste a versão do PHP instalada
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+
+    # Impede acesso direto a arquivos de configuração/includes fora de public/
+    location ~ /(config|includes|database)/ {
+        deny all;
+    }
+}
