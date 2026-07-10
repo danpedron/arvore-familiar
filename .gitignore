@@ -1,1 +1,12 @@
-public/uploads
+# Configuração local com credenciais reais — cada ambiente tem a sua
+config/database.php
+
+# Arquivos enviados pelos usuários (fotos e documentos)
+public/uploads/fotos/*
+public/uploads/documentos/*
+!public/uploads/fotos/.gitkeep
+!public/uploads/documentos/.gitkeep
+
+# Diversos
+.DS_Store
+*.log

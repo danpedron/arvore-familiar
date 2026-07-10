@@ -24,13 +24,19 @@ Sistema simples e leve para registrar sua árvore genealógica, com fotos e docu
 
 2. **Configurar a conexão**
 
-   Edite `config/database.php` com suas credenciais do MariaDB:
+   Copie o arquivo de exemplo e edite com suas credenciais reais do MariaDB:
+   ```bash
+   cp config/database.php-sample config/database.php
+   ```
+   Depois edite `config/database.php`:
    ```php
    define('DB_HOST', 'localhost');
    define('DB_NAME', 'arvore_familiar');
    define('DB_USER', 'seu_usuario');
    define('DB_PASS', 'sua_senha');
    ```
+
+   `config/database.php` está no `.gitignore` — ele não deve ser versionado, já que contém credenciais reais e é diferente em cada ambiente. Só o `config/database.php-sample` (com valores de exemplo) fica no repositório.
 
 3. **Permissões da pasta de uploads**
 
