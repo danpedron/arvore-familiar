@@ -127,6 +127,27 @@ function removerUniao(int $uniaoId): void {
     $stmt->execute([$uniaoId]);
 }
 
+// --- Nomes adicionais (nome de casada, religioso etc.) ---
+
+function adicionarNomeAdicional(int $pessoaId, string $nome, string $tipo = 'casamento', ?int $uniaoId = null, string $observacao = ''): void {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare('INSERT INTO nomes_pessoa (pessoa_id, nome, tipo, uniao_id, observacao) VALUES (?, ?, ?, ?, ?)');
+    $stmt->execute([$pessoaId, $nome, $tipo, $uniaoId ?: null, $observacao ?: null]);
+}
+
+function listarNomesAdicionais(int $pessoaId): array {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare('SELECT * FROM nomes_pessoa WHERE pessoa_id = ? ORDER BY criado_em');
+    $stmt->execute([$pessoaId]);
+    return $stmt->fetchAll();
+}
+
+function removerNomeAdicional(int $nomeId): void {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare('DELETE FROM nomes_pessoa WHERE id = ?');
+    $stmt->execute([$nomeId]);
+}
+
 // --- Mídias (fotos e documentos) ---
 
 function adicionarMidia(int $pessoaId, string $tipo, string $caminho, string $titulo = ''): void {

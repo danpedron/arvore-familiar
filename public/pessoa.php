@@ -11,7 +11,7 @@ if (!$pessoa) {
     exit;
 }
 
-// Ações via POST (adicionar relações e mídias)
+// Ações via POST (adicionar relações, nomes e mídias)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao = $_POST['acao'] ?? '';
 
@@ -27,13 +27,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         removerPaiMae((int) $_POST['filho_id'], $id);
     } elseif ($acao === 'remove_uniao' && !empty($_POST['uniao_id'])) {
         removerUniao((int) $_POST['uniao_id']);
-    } elseif ($acao === 'add_midia' && !empty($_FILES['arquivo']['name'])) {
-        $ext = strtolower(pathinfo($_FILES['arquivo']['name'], PATHINFO_EXTENSION));
-        $tipo = in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) ? 'foto' : 'documento';
-        $pasta = $tipo === 'foto' ? 'uploads/fotos/' : 'uploads/documentos/';
-        $nomeArquivo = $pasta . uniqid('midia_') . '.' . $ext;
-        move_uploaded_file($_FILES['arquivo']['tmp_name'], __DIR__ . '/' . $nomeArquivo);
-        adicionarMidia($id, $tipo, $nomeArquivo, trim($_POST['titulo'] ?? ''));
+    } elseif ($acao === 'add_nome' && !empty($_POST['nome'])) {
+        adicionarNomeAdicional($id, trim($_POST['nome']), $_POST['tipo_nome'] ?? 'casamento', !empty($_POST['uniao_id']) ? (int) $_POST['uniao_id'] : null, trim($_POST['observacao_nome'] ?? ''));
+    } elseif ($acao === 'remove_nome' && !empty($_POST['nome_id'])) {
+        removerNomeAdicional((int) $_POST['nome_id']);
+    } elseif ($acao === 'add_midia' && !empty($_FILES['arquivos']['name'][0])) {
+        $total = count($_FILES['arquivos']['name']);
+        for ($i = 0; $i < $total; $i++) {
+            if ($_FILES['arquivos']['error'][$i] !== UPLOAD_ERR_OK) continue;
+            $nomeOriginal = $_FILES['arquivos']['name'][$i];
+            $ext = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
+            $tipo = in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) ? 'foto' : 'documento';
+            $pasta = $tipo === 'foto' ? 'uploads/fotos/' : 'uploads/documentos/';
+            $nomeArquivo = $pasta . uniqid('midia_') . '.' . $ext;
+            move_uploaded_file($_FILES['arquivos']['tmp_name'][$i], __DIR__ . '/' . $nomeArquivo);
+            $titulo = $total === 1 ? trim($_POST['titulo'] ?? '') : pathinfo($nomeOriginal, PATHINFO_FILENAME);
+            adicionarMidia($id, $tipo, $nomeArquivo, $titulo);
+        }
     } elseif ($acao === 'remove_midia' && !empty($_POST['midia_id'])) {
         excluirMidia((int) $_POST['midia_id']);
     } elseif ($acao === 'excluir_pessoa') {
@@ -50,8 +60,16 @@ $pais = listarPais($id);
 $filhos = listarFilhos($id);
 $conjuges = listarConjuges($id);
 $midias = listarMidias($id);
+$nomesAdicionais = listarNomesAdicionais($id);
 $todasPessoas = listarPessoas();
 $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
+
+$rotulosTipoNome = [
+    'casamento' => 'Nome de casamento',
+    'religioso' => 'Nome religioso',
+    'profissional' => 'Nome profissional',
+    'outro' => 'Outro',
+];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -70,8 +88,8 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
     <div class="card" style="display:flex; gap:20px; flex-wrap:wrap;">
         <img src="<?= $pessoa['foto_perfil'] ? htmlspecialchars($pessoa['foto_perfil']) : 'https://via.placeholder.com/160x160/e2ddd3/999?text=Sem+foto' ?>" style="width:160px; height:160px; object-fit:cover; border-radius:10px;">
         <div style="flex:1; min-width:220px;">
-            <h1 style="margin:0 0 6px;"><?= htmlspecialchars($pessoa['nome_completo']) ?></h1>
-            <?php if ($pessoa['apelido']): ?><p style="color:#777; margin:0 0 10px;">"<?= htmlspecialchars($pessoa['apelido']) ?>"</p><?php endif; ?>
+            <h1 style="margin:0 0 2px;"><?= htmlspecialchars($pessoa['nome_completo']) ?></h1>
+            <p style="color:#999; font-size:0.8em; margin:0 0 10px;">nome de nascimento<?= $pessoa['apelido'] ? ' · apelido "' . htmlspecialchars($pessoa['apelido']) . '"' : '' ?></p>
 
             <?php if ($pessoa['data_nascimento']): ?>
                 <p>🎂 <?= date('d/m/Y', strtotime($pessoa['data_nascimento'])) ?><?= $pessoa['local_nascimento'] ? ' — ' . htmlspecialchars($pessoa['local_nascimento']) : '' ?>
@@ -94,6 +112,56 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
         </div>
     </div>
 
+    <!-- Nomes adicionais -->
+    <div class="card">
+        <h2>Outros nomes</h2>
+        <p style="color:#666; font-size:0.9em; margin-top:-8px;">Sobrenomes ou nomes adotados ao longo da vida (ex: nome de casada). O nome de nascimento acima continua sendo o principal.</p>
+        <?php if (empty($nomesAdicionais)): ?>
+            <p style="color:#999;">Nenhum outro nome registrado.</p>
+        <?php else: ?>
+            <ul class="relacoes-lista">
+                <?php foreach ($nomesAdicionais as $n): ?>
+                    <li>
+                        <span><strong><?= htmlspecialchars($n['nome']) ?></strong> <span style="color:#777; font-size:0.85em;">(<?= htmlspecialchars($rotulosTipoNome[$n['tipo']] ?? $n['tipo']) ?><?= $n['observacao'] ? ' — ' . htmlspecialchars($n['observacao']) : '' ?>)</span></span>
+                        <form method="post" onsubmit="return confirm('Remover este nome?');">
+                            <input type="hidden" name="acao" value="remove_nome">
+                            <input type="hidden" name="nome_id" value="<?= $n['id'] ?>">
+                            <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
+                        </form>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+            <input type="hidden" name="acao" value="add_nome">
+            <div style="flex:1; min-width:180px;">
+                <label>Novo nome</label>
+                <input type="text" name="nome" placeholder="Ex: Maria Silva Santos" required>
+            </div>
+            <div>
+                <label>Tipo</label>
+                <select name="tipo_nome">
+                    <option value="casamento">Nome de casamento</option>
+                    <option value="religioso">Nome religioso</option>
+                    <option value="profissional">Nome profissional</option>
+                    <option value="outro">Outro</option>
+                </select>
+            </div>
+            <?php if (!empty($conjuges)): ?>
+            <div>
+                <label>Relacionado à união com</label>
+                <select name="uniao_id">
+                    <option value="">—</option>
+                    <?php foreach ($conjuges as $c): ?>
+                        <option value="<?= $c['uniao_id'] ?>"><?= htmlspecialchars($c['nome_completo']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+            <button type="submit">Adicionar</button>
+        </form>
+    </div>
+
     <!-- Pais -->
     <div class="card">
         <h2>Pais</h2>
@@ -109,10 +177,10 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
                 </li>
             <?php endforeach; ?>
         </ul>
-        <form method="post" style="display:flex; gap:8px; align-items:end;">
+        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_pai">
-            <div style="flex:1;">
-                <label>Adicionar pai/mãe</label>
+            <div style="flex:1; min-width:180px;">
+                <label>Vincular pai/mãe já cadastrado(a)</label>
                 <select name="pai_mae_id" required>
                     <option value="">Selecione...</option>
                     <?php foreach ($todasPessoas as $tp): if ($tp['id'] == $id) continue; ?>
@@ -122,6 +190,9 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
             </div>
             <button type="submit">Adicionar</button>
         </form>
+        <p style="margin-top:10px;">
+            <a href="pessoa_editar.php?vincular_a=<?= $id ?>&tipo_vinculo=pai_mae" class="btn btn-secundario">+ Cadastrar novo pai/mãe</a>
+        </p>
     </div>
 
     <!-- Cônjuges -->
@@ -142,8 +213,8 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
         </ul>
         <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_conjuge">
-            <div style="flex:1;">
-                <label>Adicionar cônjuge</label>
+            <div style="flex:1; min-width:180px;">
+                <label>Vincular cônjuge já cadastrado(a)</label>
                 <select name="conjuge_id" required>
                     <option value="">Selecione...</option>
                     <?php foreach ($todasPessoas as $tp): if ($tp['id'] == $id) continue; ?>
@@ -166,6 +237,9 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
             </div>
             <button type="submit">Adicionar</button>
         </form>
+        <p style="margin-top:10px;">
+            <a href="pessoa_editar.php?vincular_a=<?= $id ?>&tipo_vinculo=conjuge" class="btn btn-secundario">+ Cadastrar novo cônjuge</a>
+        </p>
     </div>
 
     <!-- Filhos -->
@@ -183,10 +257,10 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
                 </li>
             <?php endforeach; ?>
         </ul>
-        <form method="post" style="display:flex; gap:8px; align-items:end;">
+        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_filho">
-            <div style="flex:1;">
-                <label>Adicionar filho(a)</label>
+            <div style="flex:1; min-width:180px;">
+                <label>Vincular filho(a) já cadastrado(a)</label>
                 <select name="filho_id" required>
                     <option value="">Selecione...</option>
                     <?php foreach ($todasPessoas as $tp): if ($tp['id'] == $id) continue; ?>
@@ -196,11 +270,15 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
             </div>
             <button type="submit">Adicionar</button>
         </form>
+        <p style="margin-top:10px;">
+            <a href="pessoa_editar.php?vincular_a=<?= $id ?>&tipo_vinculo=filho" class="btn btn-secundario">+ Cadastrar novo filho(a)</a>
+        </p>
     </div>
 
     <!-- Fotos e documentos -->
     <div class="card">
         <h2>Fotos e documentos</h2>
+        <p style="color:#666; font-size:0.9em; margin-top:-8px;">Certidões de nascimento, casamento, batismo, fotos antigas etc. Totalmente opcional.</p>
         <div class="midias-grid">
             <?php foreach ($midias as $m): ?>
                 <div>
@@ -220,10 +298,10 @@ $idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
 
         <form method="post" enctype="multipart/form-data" style="margin-top:16px;">
             <input type="hidden" name="acao" value="add_midia">
-            <label>Título (opcional)</label>
+            <label>Título (opcional, usado apenas se enviar um único arquivo)</label>
             <input type="text" name="titulo">
-            <label>Arquivo (foto ou documento)</label>
-            <input type="file" name="arquivo" required>
+            <label>Arquivos (fotos ou documentos — pode selecionar vários de uma vez)</label>
+            <input type="file" name="arquivos[]" multiple>
             <button type="submit">Enviar</button>
         </form>
     </div>

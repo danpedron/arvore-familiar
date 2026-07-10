@@ -15,6 +15,9 @@ CREATE TABLE usuarios (
 ) ENGINE=InnoDB;
 
 -- Pessoas cadastradas na árvore (vivas ou falecidas)
+-- nome_completo deve ser o NOME DE NASCIMENTO/BATISMO (não o nome de casada/casado),
+-- para manter a identificação da pessoa estável independente de casamentos.
+-- Nomes adotados por casamento ficam na tabela `nomes_pessoa`.
 CREATE TABLE pessoas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nome_completo VARCHAR(200) NOT NULL,
@@ -57,6 +60,20 @@ CREATE TABLE unioes (
     status ENUM('ativo', 'divorciado', 'viuvo', 'encerrado') DEFAULT 'ativo',
     FOREIGN KEY (pessoa1_id) REFERENCES pessoas(id) ON DELETE CASCADE,
     FOREIGN KEY (pessoa2_id) REFERENCES pessoas(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Nomes adicionais que a pessoa adotou ao longo da vida (nome de casada, nome religioso etc.)
+-- Permite registrar mais de um, já que uma pessoa pode ter se casado mais de uma vez.
+CREATE TABLE nomes_pessoa (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pessoa_id INT NOT NULL,
+    nome VARCHAR(200) NOT NULL,
+    tipo ENUM('casamento', 'religioso', 'profissional', 'outro') DEFAULT 'casamento',
+    uniao_id INT NULL,
+    observacao VARCHAR(200) NULL,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pessoa_id) REFERENCES pessoas(id) ON DELETE CASCADE,
+    FOREIGN KEY (uniao_id) REFERENCES unioes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Documentos e fotos anexados a uma pessoa

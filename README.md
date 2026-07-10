@@ -12,9 +12,14 @@ Sistema simples e leve para registrar sua árvore genealógica, com fotos e docu
 
 1. **Criar o banco de dados**
 
-   Importe o schema:
+   Instalação nova — importe o schema completo:
    ```bash
    mysql -u root -p < database/schema.sql
+   ```
+
+   Se você já tinha instalado uma versão anterior deste projeto (sem a tabela `nomes_pessoa`), rode só a migração:
+   ```bash
+   mysql -u root -p < database/migracao_001_nomes_pessoa.sql
    ```
 
 2. **Configurar a conexão**
@@ -80,6 +85,14 @@ arvore-familiar/
    - Vincular pais, cônjuges e filhos (basta selecionar pessoas já cadastradas)
    - Fazer upload de fotos e documentos (certidões, escrituras etc.)
    - Editar dados biográficos e biografia livre
+
+## Nomes de nascimento vs. nomes de casamento
+
+O campo principal de cada pessoa (`nome_completo`) deve sempre ser o **nome de nascimento/batismo** — isso mantém a identidade da pessoa estável na árvore mesmo que ela tenha mudado de sobrenome por casamento (comum no Brasil, especialmente para mulheres). Sobrenomes ou nomes adotados depois (nome de casada, nome religioso etc.) são registrados separadamente na seção "Outros nomes" do perfil da pessoa, e podem ser vários (ex: mais de um casamento). Isso evita ter que escolher "qual nome" cadastrar e preserva o histórico completo.
+
+## Cadastrando parentes que ainda não existem no sistema
+
+Nas seções de Pais, Cônjuges e Filhos do perfil de uma pessoa, além de vincular alguém já cadastrado, há um botão "+ Cadastrar novo(a) ..." que abre o formulário de nova pessoa e, ao salvar, já cria o vínculo automaticamente — não é mais necessário cadastrar a pessoa antes e depois ir vinculá-la manualmente.
 
 ## Visualização da árvore
 
