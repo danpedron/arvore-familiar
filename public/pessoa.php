@@ -123,7 +123,6 @@ $rotulosTipoNome = [
             <?php if ($pessoa['biografia']): ?><p><?= nl2br(htmlspecialchars($pessoa['biografia'])) ?></p><?php endif; ?>
 
             <a href="pessoa_editar.php?id=<?= $id ?>" class="btn">Editar dados</a>
-            <a href="arvore.php?foco=<?= $id ?>" class="btn btn-secundario">Ver na árvore</a>
             <form method="post" style="display:inline;" onsubmit="return confirm('Excluir esta pessoa e todas as suas relações e mídias?');">
                 <input type="hidden" name="acao" value="excluir_pessoa">
                 <button type="submit" class="btn-perigo">Excluir pessoa</button>
