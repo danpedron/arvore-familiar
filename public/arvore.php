@@ -20,6 +20,12 @@ exigirLogin();
         .legenda { display: flex; gap: 20px; font-size: 0.85em; color: #666; margin-top: 10px; flex-wrap: wrap; }
         .legenda span { display: inline-flex; align-items: center; gap: 6px; }
         .legenda .bolinha { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
+        /* A biblioteca desenha as linhas de conexão com stroke="#fff" fixo via JS,
+           pensado para fundo escuro. Como nosso fundo é claro, precisamos sobrescrever
+           a cor por CSS (que tem prioridade sobre o atributo definido no SVG). */
+        .f3 .link { stroke: #8a8578 !important; stroke-width: 2px !important; }
+        .f3 .link.f3-path-to-main { stroke: #3c5a48 !important; }
     </style>
 </head>
 <body>
@@ -65,7 +71,8 @@ async function iniciarArvore() {
     }
 
     const chart = f3.createChart('#FamilyChart', dados)
-        .setTransitionTime(700);
+        .setTransitionTime(700)
+        .setShowSiblingsOfMain(true);
 
     chart.setCardHtml()
         .setCardDisplay([['nome'], ['datas']])
