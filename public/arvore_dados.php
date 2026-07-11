@@ -42,7 +42,7 @@ foreach ($pessoas as $p) {
     $dados = [
         'nome' => $p['nome_completo'],
         'datas' => formatarDatas($p),
-        'avatar' => $p['foto_perfil'] ? $p['foto_perfil'] : '',
+        'avatar' => caminhoFotoValido($p['foto_perfil']),
     ];
     // A biblioteca só reconhece 'M' ou 'F'; outros valores ficam sem gênero definido (estilo neutro)
     if ($p['sexo'] === 'M' || $p['sexo'] === 'F') {

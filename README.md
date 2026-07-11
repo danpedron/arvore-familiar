@@ -117,6 +117,12 @@ sudo systemctl restart php8.3-fpm
 
 Uma mesma mídia (ex: a certidão de casamento) pode agora ficar vinculada a várias pessoas ao mesmo tempo — no perfil de cada uma delas, ela aparece com o texto "Também vinculada a: ...". Ao enviar um novo arquivo, ele é vinculado só à pessoa atual; para vinculá-lo também a outra pessoa, vá ao perfil dela e use "Vincular um arquivo já cadastrado no sistema" (aparece uma lista dos arquivos que ainda não estão vinculados a ela). O botão "Desvincular" remove o vínculo apenas com aquela pessoa — o arquivo só é apagado de fato quando não sobra nenhum vínculo.
 
+## Fotos que não existem mais em disco
+
+Se o caminho de uma foto está salvo no banco mas o arquivo físico não existe mais (situação comum ao mover a pasta `public/uploads/` de um ambiente pra outro, já que ela normalmente não vai dentro do zip do projeto), o sistema não tenta mais carregar a imagem quebrada. `urlFotoOuPlaceholder()` (em `includes/functions.php`) confere com `file_exists()` antes de montar a URL e usa um placeholder local (SVG embutido, sem nenhuma requisição de rede) quando o arquivo não existe — isso evita 404 nos logs do nginx e bloqueios de ferramentas como fail2ban.
+
+Se você tiver fotos "sumidas", vale conferir se a pasta `public/uploads/` foi realmente copiada pro servidor de produção (ela é ignorada pelo `.gitignore`, então não vem automaticamente com o `git pull`/deploy).
+
 ## Nomes de nascimento vs. nomes de casamento
 
 O campo principal de cada pessoa (`nome_completo`) deve sempre ser o **nome de nascimento/batismo** — isso mantém a identidade da pessoa estável na árvore mesmo que ela tenha mudado de sobrenome por casamento (comum no Brasil, especialmente para mulheres). Sobrenomes ou nomes adotados depois (nome de casada, nome religioso etc.) são registrados separadamente na seção "Outros nomes" do perfil da pessoa, e podem ser vários (ex: mais de um casamento). Isso evita ter que escolher "qual nome" cadastrar e preserva o histórico completo.

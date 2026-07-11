@@ -97,7 +97,7 @@ $rotulosTipoNome = [
 
 <div class="container">
     <div class="card" style="display:flex; gap:20px; flex-wrap:wrap;">
-        <img src="<?= $pessoa['foto_perfil'] ? htmlspecialchars($pessoa['foto_perfil']) : 'https://via.placeholder.com/160x160/e2ddd3/999?text=Sem+foto' ?>" style="width:160px; height:160px; object-fit:cover; border-radius:10px;">
+        <img src="<?= htmlspecialchars(urlFotoOuPlaceholder($pessoa['foto_perfil'])) ?>" style="width:160px; height:160px; object-fit:cover; border-radius:10px;">
         <div style="flex:1; min-width:220px;">
             <h1 style="margin:0 0 2px;"><?= htmlspecialchars($pessoa['nome_completo']) ?></h1>
             <p style="color:#999; font-size:0.8em; margin:0 0 10px;">nome de nascimento<?= $pessoa['apelido'] ? ' · apelido "' . htmlspecialchars($pessoa['apelido']) . '"' : '' ?></p>
@@ -344,7 +344,7 @@ $rotulosTipoNome = [
             ?>
                 <div>
                     <?php if ($m['tipo'] === 'foto'): ?>
-                        <img src="<?= htmlspecialchars($m['caminho_arquivo']) ?>" alt="">
+                        <img src="<?= htmlspecialchars(urlFotoOuPlaceholder($m['caminho_arquivo'])) ?>" alt="">
                     <?php else: ?>
                         <a href="<?= htmlspecialchars($m['caminho_arquivo']) ?>" target="_blank" class="btn" style="width:100%; text-align:center;">📄 <?= htmlspecialchars($m['titulo'] ?: 'Documento') ?></a>
                     <?php endif; ?>

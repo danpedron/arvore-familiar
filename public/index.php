@@ -39,7 +39,7 @@ $pessoas = listarPessoas($busca);
         <div class="grid-pessoas">
             <?php foreach ($pessoas as $p): ?>
                 <a href="pessoa.php?id=<?= $p['id'] ?>" class="pessoa-card">
-                    <img class="foto" src="<?= $p['foto_perfil'] ? htmlspecialchars($p['foto_perfil']) : 'https://via.placeholder.com/200x200/e2ddd3/999?text=Sem+foto' ?>" alt="">
+                    <img class="foto" src="<?= htmlspecialchars(urlFotoOuPlaceholder($p['foto_perfil'])) ?>" alt="">
                     <div class="info">
                         <p class="nome"><?= htmlspecialchars($p['nome_completo']) ?></p>
                         <p class="datas">

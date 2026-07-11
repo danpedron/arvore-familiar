@@ -1,6 +1,33 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
 
+// Placeholder local (SVG embutido, sem nenhuma requisição de rede) usado quando
+// a pessoa não tem foto ou quando o caminho salvo no banco aponta pra um arquivo
+// que não existe mais em disco (evita 404 no nginx e bloqueios por fail2ban).
+const FOTO_PLACEHOLDER = 'data:image/svg+xml;utf8,' .
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' .
+    '<rect width="200" height="200" fill="%23e2ddd3"/>' .
+    '<circle cx="100" cy="78" r="38" fill="%23b3ac9c"/>' .
+    '<path d="M30 190 Q100 120 170 190 Z" fill="%23b3ac9c"/>' .
+    '</svg>';
+
+// Retorna a URL da foto se o arquivo realmente existir em disco, ou o placeholder caso contrário.
+function urlFotoOuPlaceholder(?string $caminhoRelativo): string {
+    if ($caminhoRelativo && file_exists(__DIR__ . '/../public/' . $caminhoRelativo)) {
+        return $caminhoRelativo;
+    }
+    return FOTO_PLACEHOLDER;
+}
+
+// Igual à anterior, mas retorna string vazia (em vez de placeholder) quando não existe —
+// útil pra APIs/JSON como a da árvore, onde quem consome já sabe lidar com "sem foto".
+function caminhoFotoValido(?string $caminhoRelativo): string {
+    if ($caminhoRelativo && file_exists(__DIR__ . '/../public/' . $caminhoRelativo)) {
+        return $caminhoRelativo;
+    }
+    return '';
+}
+
 function listarPessoas(string $busca = ''): array {
     $pdo = getConexao();
     if ($busca !== '') {
