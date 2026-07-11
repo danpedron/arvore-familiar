@@ -127,7 +127,16 @@ Nas seções de Pais, Cônjuges e Filhos do perfil de uma pessoa, além de vincu
 
 ## Visualização da árvore
 
-A página `arvore.php` desenha a árvore genealógica em um layout hierárquico fixo (estilo genograma/organograma, parecido com o MyHeritage): cada geração fica em uma linha, pessoas são caixas retangulares com foto e nome, casais ficam lado a lado, e a posição horizontal de cada pessoa é calculada a partir da posição média de seus pais (algoritmo de "baricentro"), o que mantém a árvore organizada mesmo em famílias grandes — nada de nós flutuando aleatoriamente. Linhas verdes sólidas com barramento indicam filiação (pai/mãe → filhos); linhas laranja tracejadas indicam uniões/casamentos. Use os botões de zoom ou a roda do mouse, e arraste para navegar.
+Depois de duas tentativas com layout escrito à mão (força do D3 e depois um algoritmo hierárquico próprio) apresentarem bugs de posicionamento em famílias com casamentos "assimétricos" (cônjuge sem ancestrais cadastrados, múltiplos casamentos etc.), a página `arvore.php` passou a usar a biblioteca **[family-chart](https://github.com/donatso/family-chart)**, feita especificamente para árvores genealógicas — ela resolve internamente os casos que nosso código caseiro não tratava direito.
+
+Funcionamento:
+- Clique em qualquer pessoa para centralizar a árvore nela e navegar pelos parentes (comportamento nativo da biblioteca).
+- Busca por nome no campo de texto acima da árvore, com autocomplete.
+- Botão "Ver perfil completo" sempre aponta para a pessoa atualmente centralizada, levando ao perfil de verdade (com fotos, documentos, relações editáveis etc. — a árvore em si é só visualização).
+- No perfil de cada pessoa há um link "Ver na árvore" que abre a árvore já centralizada nela (`arvore.php?foco=ID`).
+- `public/arvore_dados.php` só converte os dados do banco para o formato que a biblioteca espera (pessoas com `rels.parents/spouses/children`); todo o cálculo de posição, geração e desenho das linhas é feito pela biblioteca.
+
+A biblioteca é carregada via CDN (unpkg) tanto o JS quanto o CSS — não precisa instalar nada.
 
 ## Próximos passos sugeridos (não incluídos nesta versão inicial)
 
