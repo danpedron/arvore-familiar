@@ -123,3 +123,36 @@ button, .btn {
 
 .erro { color: #a33; background: #fce8e8; padding: 10px; border-radius: 6px; }
 .sucesso { color: #2a6b2a; background: #e8f7e8; padding: 10px; border-radius: 6px; }
+
+.busca-local { position: relative; }
+
+.sugestoes {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 20;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.sugestao-item {
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 0.9em;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.sugestao-item:hover { background: #f5f3ef; }
+
+.status-local {
+    font-size: 0.8em;
+    margin-top: 4px;
+    min-height: 1em;
+}

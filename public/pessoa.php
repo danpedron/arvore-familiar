@@ -21,6 +21,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         adicionarPaiMae((int) $_POST['filho_id'], $id);
     } elseif ($acao === 'add_conjuge' && !empty($_POST['conjuge_id'])) {
         adicionarUniao($id, (int) $_POST['conjuge_id'], $_POST['tipo_uniao'] ?? 'casamento', $_POST['data_uniao'] ?? null);
+    } elseif ($acao === 'editar_uniao' && !empty($_POST['uniao_id'])) {
+        atualizarUniao(
+            (int) $_POST['uniao_id'],
+            $_POST['tipo_uniao_editar'] ?? 'casamento',
+            $_POST['data_inicio_editar'] ?? null,
+            $_POST['data_fim_editar'] ?? null,
+            $_POST['status_uniao_editar'] ?? 'ativo'
+        );
     } elseif ($acao === 'remove_pai' && !empty($_POST['pai_mae_id'])) {
         removerPaiMae($id, (int) $_POST['pai_mae_id']);
     } elseif ($acao === 'remove_filho' && !empty($_POST['filho_id'])) {
@@ -42,10 +50,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nomeArquivo = $pasta . uniqid('midia_') . '.' . $ext;
             move_uploaded_file($_FILES['arquivos']['tmp_name'][$i], __DIR__ . '/' . $nomeArquivo);
             $titulo = $total === 1 ? trim($_POST['titulo'] ?? '') : pathinfo($nomeOriginal, PATHINFO_FILENAME);
-            adicionarMidia($id, $tipo, $nomeArquivo, $titulo);
+            adicionarMidia([$id], $tipo, $nomeArquivo, $titulo);
         }
-    } elseif ($acao === 'remove_midia' && !empty($_POST['midia_id'])) {
-        excluirMidia((int) $_POST['midia_id']);
+    } elseif ($acao === 'desvincular_midia' && !empty($_POST['midia_id'])) {
+        desvincularMidiaDePessoa((int) $_POST['midia_id'], $id);
+    } elseif ($acao === 'vincular_midia_existente' && !empty($_POST['midia_id'])) {
+        vincularMidiaAPessoa((int) $_POST['midia_id'], $id);
     } elseif ($acao === 'excluir_pessoa') {
         excluirPessoa($id);
         header('Location: index.php');
@@ -60,9 +70,10 @@ $pais = listarPais($id);
 $filhos = listarFilhos($id);
 $conjuges = listarConjuges($id);
 $midias = listarMidias($id);
+$midiasDisponiveis = listarMidiasNaoVinculadas($id);
 $nomesAdicionais = listarNomesAdicionais($id);
 $todasPessoas = listarPessoas();
-$idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento']);
+$idadeAtual = idade($pessoa['data_nascimento'], $pessoa['data_falecimento'], (bool) $pessoa['falecido']);
 
 $rotulosTipoNome = [
     'casamento' => 'Nome de casamento',
@@ -93,13 +104,20 @@ $rotulosTipoNome = [
 
             <?php if ($pessoa['data_nascimento']): ?>
                 <p>🎂 <?= date('d/m/Y', strtotime($pessoa['data_nascimento'])) ?><?= $pessoa['local_nascimento'] ? ' — ' . htmlspecialchars($pessoa['local_nascimento']) : '' ?>
-                <?php if ($idadeAtual !== null && !$pessoa['falecido']): ?> (<?= $idadeAtual ?> anos)<?php endif; ?></p>
+                <?php if ($idadeAtual !== null && !$pessoa['falecido']): ?> (<?= $idadeAtual ?> anos)<?php endif; ?>
+                <?php if ($pessoa['local_nascimento_lat']): ?> <a href="https://www.openstreetmap.org/?mlat=<?= $pessoa['local_nascimento_lat'] ?>&mlon=<?= $pessoa['local_nascimento_lng'] ?>&zoom=12" target="_blank" style="font-size:0.8em;">(ver no mapa)</a><?php endif; ?></p>
             <?php endif; ?>
 
             <?php if ($pessoa['falecido']): ?>
-                <p>🕊️ Falecido(a) <?= $pessoa['data_falecimento'] ? 'em ' . date('d/m/Y', strtotime($pessoa['data_falecimento'])) : '' ?>
+                <p>🕊️ Falecido(a)
+                <?php if ($pessoa['data_falecimento']): ?>
+                    em <?= date('d/m/Y', strtotime($pessoa['data_falecimento'])) ?>
+                <?php else: ?>
+                    <span style="color:#999;">(data desconhecida)</span>
+                <?php endif; ?>
                 <?= $pessoa['local_falecimento'] ? ' — ' . htmlspecialchars($pessoa['local_falecimento']) : '' ?>
-                <?php if ($idadeAtual !== null): ?> (aos <?= $idadeAtual ?> anos)<?php endif; ?></p>
+                <?php if ($idadeAtual !== null): ?> (aos <?= $idadeAtual ?> anos)<?php endif; ?>
+                <?php if ($pessoa['local_falecimento_lat']): ?> <a href="https://www.openstreetmap.org/?mlat=<?= $pessoa['local_falecimento_lat'] ?>&mlon=<?= $pessoa['local_falecimento_lng'] ?>&zoom=12" target="_blank" style="font-size:0.8em;">(ver no mapa)</a><?php endif; ?></p>
             <?php endif; ?>
 
             <?php if ($pessoa['biografia']): ?><p><?= nl2br(htmlspecialchars($pessoa['biografia'])) ?></p><?php endif; ?>
@@ -199,14 +217,54 @@ $rotulosTipoNome = [
     <div class="card">
         <h2>Cônjuges / Uniões</h2>
         <ul class="relacoes-lista">
-            <?php foreach ($conjuges as $c): ?>
-                <li>
-                    <a href="pessoa.php?id=<?= $c['id'] ?>"><?= htmlspecialchars($c['nome_completo']) ?></a>
-                    <span style="color:#777; font-size:0.85em;"><?= htmlspecialchars($c['tipo']) ?><?= $c['data_inicio'] ? ' desde ' . date('d/m/Y', strtotime($c['data_inicio'])) : '' ?></span>
-                    <form method="post" onsubmit="return confirm('Remover esta união?');">
-                        <input type="hidden" name="acao" value="remove_uniao">
+            <?php foreach ($conjuges as $c): $editId = 'edit-uniao-' . $c['uniao_id']; ?>
+                <li style="display:block;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                        <span>
+                            <a href="pessoa.php?id=<?= $c['id'] ?>"><?= htmlspecialchars($c['nome_completo']) ?></a>
+                            <span style="color:#777; font-size:0.85em;">
+                                — <?= htmlspecialchars($c['tipo']) ?><?= $c['data_inicio'] ? ', desde ' . date('d/m/Y', strtotime($c['data_inicio'])) : '' ?><?= $c['data_fim'] ? ' até ' . date('d/m/Y', strtotime($c['data_fim'])) : '' ?>
+                                (<?= htmlspecialchars($c['status']) ?>)
+                            </span>
+                        </span>
+                        <span>
+                            <button type="button" class="btn-secundario" style="margin:0; padding:4px 10px;" onclick="document.getElementById('<?= $editId ?>').classList.toggle('aberto')">Editar</button>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Remover esta união?');">
+                                <input type="hidden" name="acao" value="remove_uniao">
+                                <input type="hidden" name="uniao_id" value="<?= $c['uniao_id'] ?>">
+                                <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
+                            </form>
+                        </span>
+                    </div>
+
+                    <form method="post" id="<?= $editId ?>" class="form-edicao-uniao" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-top:10px;">
+                        <input type="hidden" name="acao" value="editar_uniao">
                         <input type="hidden" name="uniao_id" value="<?= $c['uniao_id'] ?>">
-                        <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
+                        <div>
+                            <label>Tipo</label>
+                            <select name="tipo_uniao_editar">
+                                <?php foreach (['casamento' => 'Casamento', 'uniao_estavel' => 'União estável', 'namoro' => 'Namoro', 'outro' => 'Outro'] as $val => $label): ?>
+                                    <option value="<?= $val ?>" <?= $c['tipo'] === $val ? 'selected' : '' ?>><?= $label ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Data de início</label>
+                            <input type="date" name="data_inicio_editar" value="<?= htmlspecialchars($c['data_inicio'] ?? '') ?>">
+                        </div>
+                        <div>
+                            <label>Data de fim (se houver)</label>
+                            <input type="date" name="data_fim_editar" value="<?= htmlspecialchars($c['data_fim'] ?? '') ?>">
+                        </div>
+                        <div>
+                            <label>Status</label>
+                            <select name="status_uniao_editar">
+                                <?php foreach (['ativo' => 'Ativo', 'divorciado' => 'Divorciado(a)', 'viuvo' => 'Viúvo(a)', 'encerrado' => 'Encerrado'] as $val => $label): ?>
+                                    <option value="<?= $val ?>" <?= $c['status'] === $val ? 'selected' : '' ?>><?= $label ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <button type="submit">Salvar</button>
                     </form>
                 </li>
             <?php endforeach; ?>
@@ -278,19 +336,26 @@ $rotulosTipoNome = [
     <!-- Fotos e documentos -->
     <div class="card">
         <h2>Fotos e documentos</h2>
-        <p style="color:#666; font-size:0.9em; margin-top:-8px;">Certidões de nascimento, casamento, batismo, fotos antigas etc. Totalmente opcional.</p>
+        <p style="color:#666; font-size:0.9em; margin-top:-8px;">Certidões de nascimento, casamento, batismo, fotos antigas etc. Totalmente opcional. Um mesmo arquivo pode ficar vinculado a mais de uma pessoa (ex: a certidão de casamento vinculada ao marido e à esposa).</p>
         <div class="midias-grid">
-            <?php foreach ($midias as $m): ?>
+            <?php foreach ($midias as $m):
+                $outrasPessoas = listarPessoasDaMidia($m['id'], $id);
+            ?>
                 <div>
                     <?php if ($m['tipo'] === 'foto'): ?>
                         <img src="<?= htmlspecialchars($m['caminho_arquivo']) ?>" alt="">
                     <?php else: ?>
                         <a href="<?= htmlspecialchars($m['caminho_arquivo']) ?>" target="_blank" class="btn" style="width:100%; text-align:center;">📄 <?= htmlspecialchars($m['titulo'] ?: 'Documento') ?></a>
                     <?php endif; ?>
-                    <form method="post" onsubmit="return confirm('Excluir este arquivo?');" style="margin-top:4px;">
-                        <input type="hidden" name="acao" value="remove_midia">
+                    <?php if (!empty($outrasPessoas)): ?>
+                        <p style="font-size:0.75em; color:#777; margin:4px 0;">
+                            Também vinculada a: <?= htmlspecialchars(implode(', ', array_column($outrasPessoas, 'nome_completo'))) ?>
+                        </p>
+                    <?php endif; ?>
+                    <form method="post" onsubmit="return confirm('Desvincular este arquivo desta pessoa? (se não estiver vinculado a mais ninguém, será apagado)');" style="margin-top:4px;">
+                        <input type="hidden" name="acao" value="desvincular_midia">
                         <input type="hidden" name="midia_id" value="<?= $m['id'] ?>">
-                        <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px; width:100%;">Excluir</button>
+                        <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px; width:100%;">Desvincular</button>
                     </form>
                 </div>
             <?php endforeach; ?>
@@ -304,7 +369,30 @@ $rotulosTipoNome = [
             <input type="file" name="arquivos[]" multiple>
             <button type="submit">Enviar</button>
         </form>
+
+        <?php if (!empty($midiasDisponiveis)): ?>
+            <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-top:20px; border-top:1px solid #eee; padding-top:16px;">
+                <input type="hidden" name="acao" value="vincular_midia_existente">
+                <div style="flex:1; min-width:220px;">
+                    <label>Ou vincular um arquivo já cadastrado no sistema</label>
+                    <select name="midia_id" required>
+                        <option value="">Selecione...</option>
+                        <?php foreach ($midiasDisponiveis as $m): ?>
+                            <option value="<?= $m['id'] ?>">
+                                <?= $m['tipo'] === 'foto' ? '🖼️' : '📄' ?> <?= htmlspecialchars($m['titulo'] ?: 'sem título') ?> (vinculada a: <?= htmlspecialchars($m['vinculada_a']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="submit">Vincular</button>
+            </form>
+        <?php endif; ?>
     </div>
 </div>
+
+<style>
+    .form-edicao-uniao { display: none !important; }
+    .form-edicao-uniao.aberto { display: flex !important; }
+</style>
 </body>
 </html>

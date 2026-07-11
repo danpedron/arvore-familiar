@@ -29,8 +29,12 @@ function salvarPessoa(array $dados, ?int $id = null): int {
         'sexo' => $dados['sexo'],
         'data_nascimento' => $dados['data_nascimento'] ?: null,
         'local_nascimento' => $dados['local_nascimento'] ?: null,
+        'local_nascimento_lat' => ($dados['local_nascimento_lat'] ?? '') !== '' ? $dados['local_nascimento_lat'] : null,
+        'local_nascimento_lng' => ($dados['local_nascimento_lng'] ?? '') !== '' ? $dados['local_nascimento_lng'] : null,
         'data_falecimento' => $dados['data_falecimento'] ?: null,
         'local_falecimento' => $dados['local_falecimento'] ?: null,
+        'local_falecimento_lat' => ($dados['local_falecimento_lat'] ?? '') !== '' ? $dados['local_falecimento_lat'] : null,
+        'local_falecimento_lng' => ($dados['local_falecimento_lng'] ?? '') !== '' ? $dados['local_falecimento_lng'] : null,
         'falecido' => !empty($dados['falecido']) ? 1 : 0,
         'biografia' => $dados['biografia'] ?: null,
     ];
@@ -127,6 +131,12 @@ function removerUniao(int $uniaoId): void {
     $stmt->execute([$uniaoId]);
 }
 
+function atualizarUniao(int $uniaoId, string $tipo, ?string $dataInicio, ?string $dataFim, string $status): void {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare('UPDATE unioes SET tipo = ?, data_inicio = ?, data_fim = ?, status = ? WHERE id = ?');
+    $stmt->execute([$tipo, $dataInicio ?: null, $dataFim ?: null, $status, $uniaoId]);
+}
+
 // --- Nomes adicionais (nome de casada, religioso etc.) ---
 
 function adicionarNomeAdicional(int $pessoaId, string $nome, string $tipo = 'casamento', ?int $uniaoId = null, string $observacao = ''): void {
@@ -149,21 +159,40 @@ function removerNomeAdicional(int $nomeId): void {
 }
 
 // --- Mídias (fotos e documentos) ---
+// Uma mesma mídia (ex: certidão de casamento) pode estar vinculada a mais de uma pessoa.
 
-function adicionarMidia(int $pessoaId, string $tipo, string $caminho, string $titulo = ''): void {
+function adicionarMidia(array $pessoaIds, string $tipo, string $caminho, string $titulo = ''): int {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('INSERT INTO midias (pessoa_id, tipo, caminho_arquivo, titulo, enviado_por) VALUES (?, ?, ?, ?, ?)');
-    $stmt->execute([$pessoaId, $tipo, $caminho, $titulo ?: null, usuarioAtualId()]);
+    $stmt = $pdo->prepare('INSERT INTO midias (tipo, caminho_arquivo, titulo, enviado_por) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$tipo, $caminho, $titulo ?: null, usuarioAtualId()]);
+    $midiaId = (int) $pdo->lastInsertId();
+    foreach (array_unique(array_map('intval', $pessoaIds)) as $pid) {
+        vincularMidiaAPessoa($midiaId, $pid);
+    }
+    return $midiaId;
 }
 
-function listarMidias(int $pessoaId): array {
+function vincularMidiaAPessoa(int $midiaId, int $pessoaId): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('SELECT * FROM midias WHERE pessoa_id = ? ORDER BY criado_em DESC');
-    $stmt->execute([$pessoaId]);
-    return $stmt->fetchAll();
+    $stmt = $pdo->prepare('INSERT IGNORE INTO midia_pessoa (midia_id, pessoa_id) VALUES (?, ?)');
+    $stmt->execute([$midiaId, $pessoaId]);
 }
 
-function excluirMidia(int $midiaId): void {
+// Remove o vínculo com uma pessoa específica. Se não sobrar nenhum vínculo,
+// o arquivo é apagado de vez (evita arquivos órfãos ocupando espaço).
+function desvincularMidiaDePessoa(int $midiaId, int $pessoaId): void {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare('DELETE FROM midia_pessoa WHERE midia_id = ? AND pessoa_id = ?');
+    $stmt->execute([$midiaId, $pessoaId]);
+
+    $stmt = $pdo->prepare('SELECT COUNT(*) AS total FROM midia_pessoa WHERE midia_id = ?');
+    $stmt->execute([$midiaId]);
+    if ((int) $stmt->fetch()['total'] === 0) {
+        excluirMidiaCompletamente($midiaId);
+    }
+}
+
+function excluirMidiaCompletamente(int $midiaId): void {
     $pdo = getConexao();
     $stmt = $pdo->prepare('SELECT caminho_arquivo FROM midias WHERE id = ?');
     $stmt->execute([$midiaId]);
@@ -175,8 +204,56 @@ function excluirMidia(int $midiaId): void {
     $stmt->execute([$midiaId]);
 }
 
-function idade(?string $nascimento, ?string $falecimento = null): ?int {
+function listarMidias(int $pessoaId): array {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare(
+        'SELECT m.* FROM midias m
+         JOIN midia_pessoa mp ON mp.midia_id = m.id
+         WHERE mp.pessoa_id = ?
+         ORDER BY m.criado_em DESC'
+    );
+    $stmt->execute([$pessoaId]);
+    return $stmt->fetchAll();
+}
+
+// Outras pessoas (além da atual) vinculadas à mesma mídia — usado para mostrar "também vinculada a: ..."
+function listarPessoasDaMidia(int $midiaId, ?int $excetoPessoaId = null): array {
+    $pdo = getConexao();
+    $sql = 'SELECT p.id, p.nome_completo FROM pessoas p
+            JOIN midia_pessoa mp ON mp.pessoa_id = p.id
+            WHERE mp.midia_id = ?';
+    $params = [$midiaId];
+    if ($excetoPessoaId) {
+        $sql .= ' AND p.id != ?';
+        $params[] = $excetoPessoaId;
+    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+// Mídias já existentes no sistema que ainda não estão vinculadas a esta pessoa
+// (para o fluxo "vincular arquivo já existente", ex: a certidão que a esposa já subiu)
+function listarMidiasNaoVinculadas(int $pessoaId): array {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare(
+        "SELECT m.*, GROUP_CONCAT(p.nome_completo SEPARATOR ', ') AS vinculada_a
+         FROM midias m
+         JOIN midia_pessoa mp ON mp.midia_id = m.id
+         JOIN pessoas p ON p.id = mp.pessoa_id
+         WHERE m.id NOT IN (SELECT midia_id FROM midia_pessoa WHERE pessoa_id = ?)
+         GROUP BY m.id
+         ORDER BY m.criado_em DESC"
+    );
+    $stmt->execute([$pessoaId]);
+    return $stmt->fetchAll();
+}
+
+function idade(?string $nascimento, ?string $falecimento, bool $falecido = false): ?int {
     if (!$nascimento) return null;
+    // Se a pessoa é falecida mas não sabemos quando, não dá pra calcular idade —
+    // calcular contra "hoje" gerava números absurdos (ex: 186 anos).
+    if ($falecido && !$falecimento) return null;
     $inicio = new DateTime($nascimento);
     $fim = $falecimento ? new DateTime($falecimento) : new DateTime();
     return $inicio->diff($fim)->y;

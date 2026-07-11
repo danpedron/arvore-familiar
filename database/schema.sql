@@ -25,8 +25,12 @@ CREATE TABLE pessoas (
     sexo ENUM('M', 'F', 'Outro', 'Desconhecido') DEFAULT 'Desconhecido',
     data_nascimento DATE NULL,
     local_nascimento VARCHAR(200) NULL,
+    local_nascimento_lat DECIMAL(10,7) NULL,
+    local_nascimento_lng DECIMAL(10,7) NULL,
     data_falecimento DATE NULL,
     local_falecimento VARCHAR(200) NULL,
+    local_falecimento_lat DECIMAL(10,7) NULL,
+    local_falecimento_lng DECIMAL(10,7) NULL,
     falecido TINYINT(1) DEFAULT 0,
     foto_perfil VARCHAR(255) NULL,
     biografia TEXT NULL,
@@ -76,18 +80,25 @@ CREATE TABLE nomes_pessoa (
     FOREIGN KEY (uniao_id) REFERENCES unioes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Documentos e fotos anexados a uma pessoa
+-- Documentos e fotos. Uma mídia pode estar vinculada a mais de uma pessoa
+-- (ex: certidão de casamento vinculada ao marido E à esposa) via midia_pessoa.
 CREATE TABLE midias (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    pessoa_id INT NOT NULL,
     tipo ENUM('foto', 'documento') DEFAULT 'foto',
     caminho_arquivo VARCHAR(255) NOT NULL,
     titulo VARCHAR(200) NULL,
     descricao TEXT NULL,
     enviado_por INT NULL,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (pessoa_id) REFERENCES pessoas(id) ON DELETE CASCADE,
     FOREIGN KEY (enviado_por) REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE midia_pessoa (
+    midia_id INT NOT NULL,
+    pessoa_id INT NOT NULL,
+    PRIMARY KEY (midia_id, pessoa_id),
+    FOREIGN KEY (midia_id) REFERENCES midias(id) ON DELETE CASCADE,
+    FOREIGN KEY (pessoa_id) REFERENCES pessoas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Eventos da vida (opcional, para linha do tempo futura)

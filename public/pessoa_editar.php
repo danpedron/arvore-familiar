@@ -119,7 +119,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="date" name="data_nascimento" value="<?= htmlspecialchars($pessoa['data_nascimento'] ?? '') ?>">
 
             <label>Local de nascimento</label>
-            <input type="text" name="local_nascimento" value="<?= htmlspecialchars($pessoa['local_nascimento'] ?? '') ?>">
+            <div class="busca-local">
+                <input type="text" name="local_nascimento" id="local_nascimento" autocomplete="off"
+                       placeholder="Digite para buscar (ex: Jaraguá do Sul, SC)"
+                       value="<?= htmlspecialchars($pessoa['local_nascimento'] ?? '') ?>">
+                <div class="sugestoes" id="local_nascimento_sugestoes"></div>
+                <input type="hidden" name="local_nascimento_lat" id="local_nascimento_lat" value="<?= htmlspecialchars($pessoa['local_nascimento_lat'] ?? '') ?>">
+                <input type="hidden" name="local_nascimento_lng" id="local_nascimento_lng" value="<?= htmlspecialchars($pessoa['local_nascimento_lng'] ?? '') ?>">
+                <p class="status-local" id="local_nascimento_status"></p>
+            </div>
 
             <label>
                 <input type="checkbox" name="falecido" value="1" style="width:auto; display:inline-block;" <?= !empty($pessoa['falecido']) ? 'checked' : '' ?>>
@@ -130,7 +138,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="date" name="data_falecimento" value="<?= htmlspecialchars($pessoa['data_falecimento'] ?? '') ?>">
 
             <label>Local de falecimento</label>
-            <input type="text" name="local_falecimento" value="<?= htmlspecialchars($pessoa['local_falecimento'] ?? '') ?>">
+            <div class="busca-local">
+                <input type="text" name="local_falecimento" id="local_falecimento" autocomplete="off"
+                       placeholder="Digite para buscar (ex: Curitiba, PR)"
+                       value="<?= htmlspecialchars($pessoa['local_falecimento'] ?? '') ?>">
+                <div class="sugestoes" id="local_falecimento_sugestoes"></div>
+                <input type="hidden" name="local_falecimento_lat" id="local_falecimento_lat" value="<?= htmlspecialchars($pessoa['local_falecimento_lat'] ?? '') ?>">
+                <input type="hidden" name="local_falecimento_lng" id="local_falecimento_lng" value="<?= htmlspecialchars($pessoa['local_falecimento_lng'] ?? '') ?>">
+                <p class="status-local" id="local_falecimento_status"></p>
+            </div>
 
             <label>Biografia / notas</label>
             <textarea name="biografia" rows="4"><?= htmlspecialchars($pessoa['biografia'] ?? '') ?></textarea>
@@ -139,5 +155,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
     </div>
 </div>
+<script src="js/busca-local.js"></script>
+<script>
+    buscaLocalIniciar('nascimento');
+    buscaLocalIniciar('falecimento');
+</script>
 </body>
 </html>

@@ -4,8 +4,8 @@
 
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'arvore_familiar');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_USER', 'afuser');
+define('DB_PASS', 'afpassword');
 define('DB_CHARSET', 'utf8mb4');
 
 function getConexao(): PDO {
