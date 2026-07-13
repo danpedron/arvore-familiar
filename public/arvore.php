@@ -43,7 +43,7 @@ exigirLogin();
 <div class="container">
     <div class="card">
         <h1 style="margin-top:0;">Árvore genealógica</h1>
-        <p style="color:#666;">Clique em uma pessoa para centralizar a árvore nela e explorar seus parentes. Use a busca para pular direto para alguém, ou o botão abaixo para abrir o perfil completo.</p>
+        <p style="color:#666;">Clique em uma pessoa para centralizar a árvore nela e explorar seus parentes. Use a busca para pular direto para alguém, ou o botão abaixo para abrir o perfil completo. Pra manter a navegação rápida, só as gerações mais próximas de quem está centralizado são desenhadas — ramos mais distantes aparecem com um "+" clicável pra expandir, ou você pode ir direto neles pela busca.</p>
 
         <div class="barra-arvore">
             <div id="busca-pessoa-cont" class="f3-search-cont"></div>
@@ -77,7 +77,9 @@ async function iniciarArvore() {
         .setTransitionTime(700)
         .setShowSiblingsOfMain(true)
         .setCardXSpacing(280)
-        .setCardYSpacing(220);
+        .setCardYSpacing(220)
+        .setAncestryDepth(4)
+        .setProgenyDepth(4);
 
     chart.setCardHtml()
         .setCardDisplay([['nome'], ['datas']])
