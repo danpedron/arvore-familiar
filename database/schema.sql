@@ -14,6 +14,23 @@ CREATE TABLE usuarios (
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+-- Registro de cada execução de importação (ex: GEDCOM), para permitir reverter depois.
+CREATE TABLE importacoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo ENUM('gedcom') DEFAULT 'gedcom',
+    arquivo_original VARCHAR(255) NOT NULL,
+    status ENUM('em_andamento', 'concluida', 'revertida', 'erro') DEFAULT 'em_andamento',
+    backup_arquivo VARCHAR(255) NULL,
+    pessoas_criadas INT DEFAULT 0,
+    pessoas_atualizadas INT DEFAULT 0,
+    relacoes_criadas INT DEFAULT 0,
+    unioes_criadas INT DEFAULT 0,
+    nomes_criados INT DEFAULT 0,
+    observacoes TEXT NULL,
+    iniciado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    finalizado_em DATETIME NULL
+) ENGINE=InnoDB;
+
 -- Pessoas cadastradas na árvore (vivas ou falecidas)
 -- nome_completo deve ser o NOME DE NASCIMENTO/BATISMO (não o nome de casada/casado),
 -- para manter a identificação da pessoa estável independente de casamentos.
@@ -34,11 +51,30 @@ CREATE TABLE pessoas (
     falecido TINYINT(1) DEFAULT 0,
     foto_perfil VARCHAR(255) NULL,
     biografia TEXT NULL,
+    origem ENUM('manual', 'gedcom') NOT NULL DEFAULT 'manual',
+    importacao_id INT NULL,
+    gedcom_id VARCHAR(30) NULL,
     criado_por INT NULL,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
     atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (criado_por) REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (importacao_id) REFERENCES importacoes(id) ON DELETE SET NULL,
     INDEX idx_nome (nome_completo)
+) ENGINE=InnoDB;
+
+-- Log campo a campo de toda alteração feita em pessoas JÁ EXISTENTES por uma importação
+-- (preenchimento de dados faltantes). Permite reverter só essas mudanças pontuais,
+-- sem precisar restaurar o backup inteiro.
+CREATE TABLE importacao_alteracoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    importacao_id INT NOT NULL,
+    pessoa_id INT NOT NULL,
+    campo VARCHAR(50) NOT NULL,
+    valor_anterior TEXT NULL,
+    valor_novo TEXT NULL,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (importacao_id) REFERENCES importacoes(id) ON DELETE CASCADE,
+    FOREIGN KEY (pessoa_id) REFERENCES pessoas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Relacionamentos de parentesco (pai/mãe -> filho)
@@ -48,8 +84,10 @@ CREATE TABLE relacoes_parentais (
     filho_id INT NOT NULL,
     pai_mae_id INT NOT NULL,
     tipo ENUM('biologico', 'adotivo', 'padrasto_madrasta') DEFAULT 'biologico',
+    importacao_id INT NULL,
     FOREIGN KEY (filho_id) REFERENCES pessoas(id) ON DELETE CASCADE,
     FOREIGN KEY (pai_mae_id) REFERENCES pessoas(id) ON DELETE CASCADE,
+    FOREIGN KEY (importacao_id) REFERENCES importacoes(id) ON DELETE SET NULL,
     UNIQUE KEY unico_relacao (filho_id, pai_mae_id)
 ) ENGINE=InnoDB;
 
@@ -62,8 +100,10 @@ CREATE TABLE unioes (
     data_inicio DATE NULL,
     data_fim DATE NULL,
     status ENUM('ativo', 'divorciado', 'viuvo', 'encerrado') DEFAULT 'ativo',
+    importacao_id INT NULL,
     FOREIGN KEY (pessoa1_id) REFERENCES pessoas(id) ON DELETE CASCADE,
-    FOREIGN KEY (pessoa2_id) REFERENCES pessoas(id) ON DELETE CASCADE
+    FOREIGN KEY (pessoa2_id) REFERENCES pessoas(id) ON DELETE CASCADE,
+    FOREIGN KEY (importacao_id) REFERENCES importacoes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Nomes adicionais que a pessoa adotou ao longo da vida (nome de casada, nome religioso etc.)
@@ -75,9 +115,11 @@ CREATE TABLE nomes_pessoa (
     tipo ENUM('casamento', 'religioso', 'profissional', 'outro') DEFAULT 'casamento',
     uniao_id INT NULL,
     observacao VARCHAR(200) NULL,
+    importacao_id INT NULL,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pessoa_id) REFERENCES pessoas(id) ON DELETE CASCADE,
-    FOREIGN KEY (uniao_id) REFERENCES unioes(id) ON DELETE SET NULL
+    FOREIGN KEY (uniao_id) REFERENCES unioes(id) ON DELETE SET NULL,
+    FOREIGN KEY (importacao_id) REFERENCES importacoes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Documentos e fotos. Uma mídia pode estar vinculada a mais de uma pessoa

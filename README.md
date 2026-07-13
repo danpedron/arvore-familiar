@@ -66,9 +66,17 @@ Sistema simples e leve para registrar sua árvore genealógica, com fotos e docu
 ```
 arvore-familiar/
 ├── config/
-│   └── database.php       # Configuração de conexão
+│   ├── database.php         # Configuração de conexão (NÃO versionado, você cria a partir do -sample)
+│   └── database.php-sample  # Modelo de configuração
 ├── database/
-│   └── schema.sql          # Estrutura do banco de dados
+│   ├── schema.sql            # Estrutura completa do banco (instalação nova)
+│   └── migracao_*.sql        # Migrações incrementais (instalações já existentes)
+├── scripts/                  # Scripts de linha de comando (fora de public/, não acessíveis via web)
+│   ├── GedcomParser.php       # Parser de arquivos GEDCOM
+│   ├── importar_gedcom.php    # Importador (com backup automático e rastreamento)
+│   ├── reverter_importacao.php
+│   └── listar_importacoes.php
+├── backups/                  # Backups automáticos gerados antes de cada importação (gitignored)
 ├── includes/
 │   ├── auth.php             # Login, registro, sessão
 │   └── functions.php        # CRUD de pessoas, relações, mídias
@@ -77,7 +85,7 @@ arvore-familiar/
 │   ├── login.php / registro.php / logout.php
 │   ├── pessoa.php            # Perfil da pessoa + relações + mídias
 │   ├── pessoa_editar.php     # Criar/editar pessoa
-│   ├── arvore.php            # Visualização gráfica da árvore (D3.js)
+│   ├── arvore.php            # Visualização gráfica da árvore (family-chart)
 │   ├── arvore_dados.php      # Endpoint JSON consumido pela árvore
 │   ├── geocodificar.php      # Proxy para busca de locais (Nominatim/OSM)
 │   ├── js/busca-local.js     # Autocomplete de locais no formulário
@@ -85,6 +93,12 @@ arvore-familiar/
 │   └── uploads/               # Fotos e documentos enviados
 ├── nginx.conf.example       # Configuração de referência para nginx
 └── README.md
+```
+
+**Requisitos adicionais pro importador GEDCOM**: extensão `php-mbstring` (para lidar com acentuação corretamente) e o binário `mysqldump` no PATH (geralmente já vem com `mariadb-client`/`mysql-client`).
+```bash
+sudo apt install php8.3-mbstring mariadb-client
+sudo systemctl restart php8.3-fpm
 ```
 
 ## Como usar
@@ -116,6 +130,36 @@ sudo systemctl restart php8.3-fpm
 ## Fotos e documentos vinculados a mais de uma pessoa
 
 Uma mesma mídia (ex: a certidão de casamento) pode agora ficar vinculada a várias pessoas ao mesmo tempo — no perfil de cada uma delas, ela aparece com o texto "Também vinculada a: ...". Ao enviar um novo arquivo, ele é vinculado só à pessoa atual; para vinculá-lo também a outra pessoa, vá ao perfil dela e use "Vincular um arquivo já cadastrado no sistema" (aparece uma lista dos arquivos que ainda não estão vinculados a ela). O botão "Desvincular" remove o vínculo apenas com aquela pessoa — o arquivo só é apagado de fato quando não sobra nenhum vínculo.
+
+## Importação de GEDCOM
+
+Existe um importador de linha de comando em `scripts/importar_gedcom.php` — não precisa passar pela interface web. Ele foi pensado pra ser seguro de rodar mesmo num banco já em uso:
+
+```bash
+# 1) Sempre teste antes com --dry-run (simula tudo, não grava nada)
+php scripts/importar_gedcom.php caminho/para/arquivo.ged --dry-run
+
+# 2) Depois de conferir que o resultado faz sentido, rode de verdade
+php scripts/importar_gedcom.php caminho/para/arquivo.ged
+```
+
+O que ele faz:
+- **Backup automático**: antes de qualquer alteração, roda `mysqldump` e salva em `backups/antes_importacao_<data>.sql`. Requer o binário `mysqldump` disponível no servidor.
+- **Sem duplicar pessoas**: se já existe alguém com o mesmo nome completo E a mesma data de nascimento, a pessoa NÃO é duplicada — o registro existente só é **atualizado nos campos que estavam vazios** (sexo, local de nascimento, data/local de falecimento, biografia). Campos já preenchidos nunca são sobrescritos.
+- **Rastreável**: toda pessoa criada pela importação é marcada com `origem = 'gedcom'` e um `importacao_id`. Toda alteração feita em pessoa já existente é logada campo a campo (valor anterior e novo) em `importacao_alteracoes`.
+- **Reversível de verdade**: `scripts/reverter_importacao.php <id>` desfaz exatamente o que aquela importação fez — apaga as pessoas que ela criou, restaura os campos que ela alterou em pessoas pré-existentes, e remove as relações/uniões que ela adicionou. Não depende do backup pra isso (o backup é uma segunda rede de segurança, não a única).
+
+```bash
+# Ver o histórico de importações e seus IDs
+php scripts/listar_importacoes.php
+
+# Reverter uma importação específica
+php scripts/reverter_importacao.php 3
+```
+
+Flags adicionais do importador: `--sem-backup` (pula o mysqldump, não recomendado) e `--forcar` (não pede confirmação interativa, útil em script/cron).
+
+**Limitações conhecidas**: o parser cobre o subconjunto de GEDCOM usado por praticamente todo exportador (nomes, sexo, nascimento, falecimento, uniões, filiação), mas não é 100% da especificação — não importa fontes/citações, notas longas, mídias anexadas no GEDCOM, ou múltiplos cônjuges por família além do casal principal. Datas GEDCOM aproximadas (`ABT`, `BEF`, `AFT`, `BET...AND`) são interpretadas com a melhor estimativa possível e marcadas como aproximadas na biografia da pessoa, já que o banco guarda datas exatas.
 
 ## Fotos que não existem mais em disco
 

@@ -7,6 +7,13 @@ public/uploads/documentos/*
 !public/uploads/fotos/.gitkeep
 !public/uploads/documentos/.gitkeep
 
+# Backups automáticos gerados pelo importador GEDCOM (contêm dados pessoais da família)
+backups/*
+!backups/.gitkeep
+
+# Arquivos GEDCOM que você for importar (dados pessoais, não devem ir pro repositório)
+*.ged
+
 # Diversos
 .DS_Store
 *.log

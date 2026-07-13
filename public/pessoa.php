@@ -100,7 +100,12 @@ $rotulosTipoNome = [
         <img src="<?= htmlspecialchars(urlFotoOuPlaceholder($pessoa['foto_perfil'])) ?>" style="width:160px; height:160px; object-fit:cover; border-radius:10px;">
         <div style="flex:1; min-width:220px;">
             <h1 style="margin:0 0 2px;"><?= htmlspecialchars($pessoa['nome_completo']) ?></h1>
-            <p style="color:#999; font-size:0.8em; margin:0 0 10px;">nome de nascimento<?= $pessoa['apelido'] ? ' · apelido "' . htmlspecialchars($pessoa['apelido']) . '"' : '' ?></p>
+            <p style="color:#999; font-size:0.8em; margin:0 0 10px;">
+                nome de nascimento<?= $pessoa['apelido'] ? ' · apelido "' . htmlspecialchars($pessoa['apelido']) . '"' : '' ?>
+                <?php if ($pessoa['origem'] === 'gedcom'): ?>
+                    · <span title="Importado de um arquivo GEDCOM">📥 importado (GEDCOM #<?= (int) $pessoa['importacao_id'] ?>)</span>
+                <?php endif; ?>
+            </p>
 
             <?php if ($pessoa['data_nascimento']): ?>
                 <p>🎂 <?= date('d/m/Y', strtotime($pessoa['data_nascimento'])) ?><?= $pessoa['local_nascimento'] ? ' — ' . htmlspecialchars($pessoa['local_nascimento']) : '' ?>
