@@ -131,6 +131,15 @@ sudo systemctl restart php8.3-fpm
 
 Uma mesma mídia (ex: a certidão de casamento) pode agora ficar vinculada a várias pessoas ao mesmo tempo — no perfil de cada uma delas, ela aparece com o texto "Também vinculada a: ...". Ao enviar um novo arquivo, ele é vinculado só à pessoa atual; para vinculá-lo também a outra pessoa, vá ao perfil dela e use "Vincular um arquivo já cadastrado no sistema" (aparece uma lista dos arquivos que ainda não estão vinculados a ela). O botão "Desvincular" remove o vínculo apenas com aquela pessoa — o arquivo só é apagado de fato quando não sobra nenhum vínculo.
 
+## Edição visual direto na árvore
+
+Além de explorar, dá pra editar direto na árvore: botão "✏️ Editar / adicionar parentes" abre um formulário pra a pessoa atualmente centralizada, com opções de adicionar pai/mãe/cônjuge/filho (novo ou já existente) e editar nome/datas. Cada mudança é enviada pro servidor (`arvore_salvar.php`) e sincronizada com o banco de forma **aditiva segura**:
+
+- Pessoas novas são criadas com os campos básicos (nome, sexo, datas); os demais campos (local, biografia, fotos) continuam só editáveis na tela de perfil completo.
+- Editar uma pessoa já existente pela árvore só toca nos campos nome/sexo/datas — nunca apaga apelido, local, biografia ou outros dados que ela já tinha.
+- Desvincular um parente pela árvore remove só a relação, nunca a pessoa em si.
+- **Excluir uma pessoa não é possível pela árvore, de propósito** — a biblioteca até mostra a opção, mas o clique é interceptado e redireciona pra usar o botão "Excluir pessoa" do perfil completo (que pede confirmação). Isso evita apagar alguém sem querer durante uma edição rápida.
+
 ## Importação de GEDCOM
 
 Existe um importador de linha de comando em `scripts/importar_gedcom.php` — não precisa passar pela interface web. Ele foi pensado pra ser seguro de rodar mesmo num banco já em uso:

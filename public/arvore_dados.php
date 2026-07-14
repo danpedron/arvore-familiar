@@ -42,6 +42,10 @@ foreach ($pessoas as $p) {
     $dados = [
         'nome' => $p['nome_completo'],
         'datas' => formatarDatas($p),
+        // Campos "crus" usados pelo formulário de edição (setFields) — o campo
+        // 'datas' acima é só o texto exibido no card, não dá pra editar direto.
+        'nascimento' => $p['data_nascimento'] ?? '',
+        'falecimento' => $p['data_falecimento'] ?? '',
         'avatar' => caminhoFotoValido($p['foto_perfil']),
     ];
     // A biblioteca só reconhece 'M' ou 'F'; outros valores ficam sem gênero definido (estilo neutro)

@@ -28,6 +28,40 @@ function caminhoFotoValido(?string $caminhoRelativo): string {
     return '';
 }
 
+// Atualiza SÓ os campos informados (usado pela edição visual da árvore, que só
+// conhece nome/sexo/datas — nunca deve apagar apelido, local, biografia etc.
+// que a pessoa já tinha preenchido pela tela normal de edição).
+function atualizarCamposBasicos(int $id, array $campos): void {
+    if (empty($campos)) return;
+    $permitidos = ['nome_completo', 'sexo', 'data_nascimento', 'data_falecimento', 'falecido'];
+    $campos = array_intersect_key($campos, array_flip($permitidos));
+    if (empty($campos)) return;
+
+    $pdo = getConexao();
+    $set = implode(', ', array_map(fn($c) => "$c = :$c", array_keys($campos)));
+    $campos['id'] = $id;
+    $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id")->execute($campos);
+}
+
+// Cria uma pessoa só com os campos básicos (usado quando alguém é adicionado
+// direto pela árvore visual — os demais campos ficam vazios e podem ser
+// completados depois na tela de edição normal).
+function criarPessoaBasica(array $campos): int {
+    $pdo = getConexao();
+    $dados = [
+        'nome_completo' => $campos['nome_completo'],
+        'sexo' => $campos['sexo'] ?? 'Desconhecido',
+        'data_nascimento' => $campos['data_nascimento'] ?? null,
+        'data_falecimento' => $campos['data_falecimento'] ?? null,
+        'falecido' => !empty($campos['falecido']) ? 1 : 0,
+        'criado_por' => usuarioAtualId(),
+    ];
+    $colunas = implode(', ', array_keys($dados));
+    $marcadores = ':' . implode(', :', array_keys($dados));
+    $pdo->prepare("INSERT INTO pessoas ($colunas) VALUES ($marcadores)")->execute($dados);
+    return (int) $pdo->lastInsertId();
+}
+
 function listarPessoas(string $busca = ''): array {
     $pdo = getConexao();
     if ($busca !== '') {

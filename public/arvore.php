@@ -8,9 +8,9 @@ exigirLogin();
     <meta charset="UTF-8">
     <title>Árvore Genealógica - Árvore Familiar</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://unpkg.com/family-chart/dist/styles/family-chart.css">
+    <link rel="stylesheet" href="https://unpkg.com/family-chart@0.9.0/dist/styles/family-chart.css">
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/family-chart/dist/family-chart.min.js"></script>
+    <script src="https://unpkg.com/family-chart@0.9.0/dist/family-chart.min.js"></script>
     <style>
         #FamilyChart { width: 100%; height: 78vh; background: #fbfaf7; border-radius: 10px; }
         .no-dados { text-align: center; padding: 60px 20px; color: #777; }
@@ -47,7 +47,10 @@ exigirLogin();
 
         <div class="barra-arvore">
             <div id="busca-pessoa-cont" class="f3-search-cont"></div>
-            <a id="btn-ver-perfil" href="#" class="btn">Ver perfil completo</a>
+            <div>
+                <button type="button" id="btn-editar-foco" class="btn">✏️ Editar / adicionar parentes</button>
+                <a id="btn-ver-perfil" href="#" class="btn btn-secundario">Ver perfil completo</a>
+            </div>
         </div>
 
         <div id="FamilyChart" class="f3"></div>
@@ -84,6 +87,48 @@ async function iniciarArvore() {
     chart.setCardHtml()
         .setCardDisplay([['nome'], ['datas']])
         .setStyle('imageCircleRect');
+
+    // --- Edição visual: adicionar pessoas e relações direto na árvore ---
+    // Cada mudança (pessoa nova, edição de nome/datas, parente desvinculado) é
+    // enviada ao servidor pra sincronizar com o banco. Exclusão de pessoa é
+    // bloqueada aqui de propósito — isso continua exigindo confirmação no
+    // perfil completo, pra evitar apagar alguém sem querer direto na árvore.
+    let sincronizando = false;
+    const editTree = chart.editTree()
+        .setFields(['nome', 'nascimento', 'falecimento'])
+        .setOnChange(async () => {
+            if (sincronizando) return;
+            sincronizando = true;
+            try {
+                const dadosAtuais = editTree.exportData();
+                const resp = await fetch('arvore_salvar.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: dadosAtuais }),
+                });
+                const resultado = await resp.json();
+                if (!resultado.sucesso) {
+                    alert('Não foi possível salvar essa alteração: ' + (resultado.erro || 'erro desconhecido'));
+                    return;
+                }
+                // Recarrega os dados oficiais do banco (garante IDs corretos pra quem acabou de ser criado)
+                const dadosAtualizados = await (await fetch('arvore_dados.php')).json();
+                chart.updateData(dadosAtualizados);
+                chart.updateTree({ initial: false });
+            } catch (e) {
+                alert('Erro de conexão ao salvar. Recarregue a página pra conferir se a alteração foi salva.');
+            } finally {
+                sincronizando = false;
+            }
+        })
+        .setOnDelete((datum, deletePerson, postSubmit) => {
+            alert('Pra excluir uma pessoa, abra o perfil completo dela e use o botão "Excluir pessoa" (pede confirmação). Isso evita apagar alguém sem querer direto pela árvore.');
+        });
+
+    document.getElementById('btn-editar-foco').addEventListener('click', () => {
+        const principal = chart.getMainDatum();
+        if (principal) editTree.open(principal);
+    });
 
     const btnPerfil = document.getElementById('btn-ver-perfil');
 
