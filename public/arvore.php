@@ -12,7 +12,7 @@ exigirLogin();
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/family-chart@0.9.0/dist/family-chart.min.js"></script>
     <style>
-        #FamilyChart { width: 100%; height: 78vh; background: #fbfaf7; border-radius: 10px; }
+        #FamilyChart { width: 100%; height: 78vh; background: #f2f1ee; border-radius: 10px; }
         .no-dados { text-align: center; padding: 60px 20px; color: #777; }
         .barra-arvore { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
         .barra-arvore .f3-search-cont { position: relative; min-width: 240px; }
@@ -22,13 +22,10 @@ exigirLogin();
         .legenda .bolinha { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 
         /* A biblioteca desenha as linhas de conexão com stroke="#fff" fixo via JS,
-           pensado para fundo escuro. Como nosso fundo é claro, precisamos sobrescrever
-           a cor por CSS (que tem prioridade sobre o atributo definido no SVG).
-           O rótulo (nome/datas) do card com foto circular "pendura" abaixo da foto via
-           position:absolute e tem fundo semi-transparente — por isso deixamos a linha
-           mais grossa e escura, para continuar visível mesmo passando por trás dele. */
-        .f3 .link { stroke: #2f4a3a !important; stroke-width: 3px !important; }
-        .f3 .link.f3-path-to-main { stroke: #1f332a !important; stroke-width: 4px !important; }
+           pensado pro fundo escuro que ela usa por padrão (o "tema claro" do
+           site oficial também sobrescreve isso por CSS, do mesmo jeito). */
+        .f3 .link { stroke: #b7b2a6 !important; stroke-width: 2px !important; }
+        .f3 .link.f3-path-to-main { stroke: #8a8578 !important; stroke-width: 2.5px !important; }
     </style>
 </head>
 <body>
@@ -53,8 +50,8 @@ exigirLogin();
         <div id="FamilyChart" class="f3"></div>
 
         <div class="legenda">
-            <span><span class="bolinha" style="background:#7b9fac;"></span> Masculino</span>
-            <span><span class="bolinha" style="background:#c48a92;"></span> Feminino</span>
+            <span><span class="bolinha" style="background:rgb(120,159,172);"></span> Masculino</span>
+            <span><span class="bolinha" style="background:rgb(196,138,146);"></span> Feminino</span>
             <span>🕊️ antes das datas indica falecido(a)</span>
         </div>
     </div>
@@ -79,11 +76,12 @@ async function iniciarArvore() {
         .setCardXSpacing(280)
         .setCardYSpacing(220)
         .setAncestryDepth(4)
-        .setProgenyDepth(4);
+        .setProgenyDepth(4)
+        .setDuplicateBranchToggle(true);
 
     const card = chart.setCardHtml()
         .setCardDisplay([['nome'], ['datas']])
-        .setStyle('imageCircleRect');
+        .setStyle('imageRect');
 
     // --- Edição visual: adicionar pessoas e relações direto na árvore ---
     // setCardClickOpen liga o clique no card ao formulário de edição — é o modo

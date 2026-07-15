@@ -170,7 +170,7 @@ php scripts/importar_gedcom.php caminho/para/arquivo.ged
 
 O que ele faz:
 - **Backup automático**: antes de qualquer alteração, roda `mysqldump` e salva em `backups/antes_importacao_<data>.sql`. Requer o binário `mysqldump` disponível no servidor.
-- **Sem duplicar pessoas**: se já existe alguém com o mesmo nome completo E a mesma data de nascimento, a pessoa NÃO é duplicada — o registro existente só é **atualizado nos campos que estavam vazios** (sexo, local de nascimento, data/local de falecimento, biografia). Campos já preenchidos nunca são sobrescritos.
+- **Sem duplicar pessoas**: se já existe alguém com o mesmo nome completo E a mesma data de nascimento **preenchida e coincidente**, a pessoa NÃO é duplicada — o registro existente só é **atualizado nos campos que estavam vazios** (sexo, local de nascimento, data/local de falecimento, biografia). Campos já preenchidos nunca são sobrescritos. Se a data de nascimento não bate (ou nenhuma das duas tem data registrada), o importador **sempre cria uma pessoa nova**, mesmo com nome idêntico — nomes repetidos entre gerações são comuns em genealogia (ex: neto batizado com o nome do avô), e fundir duas pessoas diferentes só por causa do nome pode criar um ciclo (alguém virando pai E filho da mesma pessoa). Prefira ter uma duplicata fácil de mesclar depois a um ciclo difícil de detectar.
 - **Rastreável**: toda pessoa criada pela importação é marcada com `origem = 'gedcom'` e um `importacao_id`. Toda alteração feita em pessoa já existente é logada campo a campo (valor anterior e novo) em `importacao_alteracoes`.
 - **Reversível de verdade**: `scripts/reverter_importacao.php <id>` desfaz exatamente o que aquela importação fez — apaga as pessoas que ela criou, restaura os campos que ela alterou em pessoas pré-existentes, e remove as relações/uniões que ela adicionou. Não depende do backup pra isso (o backup é uma segunda rede de segurança, não a única).
 
@@ -183,6 +183,8 @@ php scripts/reverter_importacao.php 3
 ```
 
 Flags adicionais do importador: `--sem-backup` (pula o mysqldump, não recomendado) e `--forcar` (não pede confirmação interativa, útil em script/cron).
+
+**Recomendação**: depois de toda importação, rode `php scripts/verificar_consistencia.php` — GEDCOMs grandes e antigos frequentemente têm nomes repetidos entre gerações sem data de nascimento, o que pode gerar pessoas duplicadas (detectável no item I do verificador) mesmo com a proteção acima.
 
 **Limitações conhecidas**: o parser cobre o subconjunto de GEDCOM usado por praticamente todo exportador (nomes, sexo, nascimento, falecimento, uniões, filiação), mas não é 100% da especificação — não importa fontes/citações, notas longas, mídias anexadas no GEDCOM, ou múltiplos cônjuges por família além do casal principal. Datas GEDCOM aproximadas (`ABT`, `BEF`, `AFT`, `BET...AND`) são interpretadas com a melhor estimativa possível e marcadas como aproximadas na biografia da pessoa, já que o banco guarda datas exatas.
 

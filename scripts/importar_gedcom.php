@@ -173,18 +173,18 @@ try {
         $biografiaImportada = $notas ? implode(' ', $notas) : null;
 
         // --- Tenta encontrar pessoa já existente (mesmo nome + mesma data de nascimento) ---
+        // IMPORTANTE: só funde com pessoa existente quando a data de nascimento bate de
+        // verdade (os dois valores preenchidos e iguais). Nomes repetidos entre gerações
+        // são comuns em genealogia (ex: neto batizado com o nome do avô) — fundir duas
+        // pessoas diferentes só por terem o mesmo nome sem data pode criar um ciclo
+        // (alguém virar pai E filho da mesma pessoa ao mesmo tempo).
         $stmtBuscaPorNome->execute([$nomePrincipal]);
         $candidatos = $stmtBuscaPorNome->fetchAll();
 
         $existente = null;
-        if (count($candidatos) === 1) {
-            $c = $candidatos[0];
-            $mesmaData = ($c['data_nascimento'] === $nascimento)
-                || ($c['data_nascimento'] === null && $nascimento === null);
-            if ($mesmaData) $existente = $c;
-        } elseif (count($candidatos) > 1) {
+        if ($nascimento !== null) {
             foreach ($candidatos as $c) {
-                if ($c['data_nascimento'] === $nascimento && $nascimento !== null) {
+                if ($c['data_nascimento'] === $nascimento) {
                     $existente = $c;
                     break;
                 }
