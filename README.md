@@ -75,7 +75,8 @@ arvore-familiar/
 │   ├── GedcomParser.php       # Parser de arquivos GEDCOM
 │   ├── importar_gedcom.php    # Importador (com backup automático e rastreamento)
 │   ├── reverter_importacao.php
-│   └── listar_importacoes.php
+│   ├── listar_importacoes.php
+│   └── verificar_consistencia.php  # Diagnóstico de ciclos/inconsistências no banco
 ├── backups/                  # Backups automáticos gerados antes de cada importação (gitignored)
 ├── includes/
 │   ├── auth.php             # Login, registro, sessão
@@ -130,6 +131,21 @@ sudo systemctl restart php8.3-fpm
 ## Fotos e documentos vinculados a mais de uma pessoa
 
 Uma mesma mídia (ex: a certidão de casamento) pode agora ficar vinculada a várias pessoas ao mesmo tempo — no perfil de cada uma delas, ela aparece com o texto "Também vinculada a: ...". Ao enviar um novo arquivo, ele é vinculado só à pessoa atual; para vinculá-lo também a outra pessoa, vá ao perfil dela e use "Vincular um arquivo já cadastrado no sistema" (aparece uma lista dos arquivos que ainda não estão vinculados a ela). O botão "Desvincular" remove o vínculo apenas com aquela pessoa — o arquivo só é apagado de fato quando não sobra nenhum vínculo.
+
+## Verificação de consistência do banco
+
+Se a árvore travar o navegador (uso alto de CPU, aviso pra encerrar a aba), o motivo mais provável é uma inconsistência nos dados que confunde o algoritmo de layout da árvore — por exemplo, alguém sendo listado como ancestral de si mesmo (ciclo). `scripts/verificar_consistencia.php` varre o banco procurando especificamente por esse tipo de problema, sem corrigir nada sozinho (só relata, com sugestão de como corrigir cada caso):
+
+```bash
+php scripts/verificar_consistencia.php
+```
+
+O que ele verifica:
+- 🔴 **Críticos** (causa mais provável de travamento): pessoa listada como pai/mãe de si mesma, **ciclos de ascendência** (ex: A é pai de B, B é pai de C, C é pai de A), pessoa casada consigo mesma, referências quebradas no banco.
+- 🟡 **Atenção** (não trava, mas vale revisar): uniões duplicadas, mais de 2 pais biológicos pra uma pessoa, união entre alguém e seu próprio ascendente/descendente, possíveis pessoas duplicadas (mesmo nome + nascimento).
+- ℹ️ **Informativo**: pessoas com número incomum de filhos/uniões cadastrados (pode indicar erro de importação, não necessariamente um problema).
+
+Testei o script inserindo propositalmente cada um desses tipos de problema num banco de teste, incluindo um ciclo real de 3 pessoas — todos foram detectados corretamente. Termina com código de saída `1` se achar algo crítico (útil se quiser rodar via script/cron) ou `0` se estiver tudo limpo.
 
 ## Edição visual direto na árvore
 
