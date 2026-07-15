@@ -43,14 +43,11 @@ exigirLogin();
 <div class="container">
     <div class="card">
         <h1 style="margin-top:0;">Árvore genealógica</h1>
-        <p style="color:#666;">Clique em uma pessoa para centralizar a árvore nela e explorar seus parentes. Use a busca para pular direto para alguém, ou o botão abaixo para abrir o perfil completo. Pra manter a navegação rápida, só as gerações mais próximas de quem está centralizado são desenhadas — ramos mais distantes aparecem com um "+" clicável pra expandir, ou você pode ir direto neles pela busca.</p>
+        <p style="color:#666;">Clique em uma pessoa para editá-la e ver botões de "+ adicionar" pai/mãe/cônjuge/filho direto ao redor dela. Use a busca pra pular direto pra alguém, ou o botão abaixo pra ver o perfil completo (fotos, documentos etc). Pra manter a navegação rápida, só as gerações mais próximas de quem está em foco são desenhadas.</p>
 
         <div class="barra-arvore">
             <div id="busca-pessoa-cont" class="f3-search-cont"></div>
-            <div>
-                <button type="button" id="btn-editar-foco" class="btn">✏️ Editar / adicionar parentes</button>
-                <a id="btn-ver-perfil" href="#" class="btn btn-secundario">Ver perfil completo</a>
-            </div>
+            <a id="btn-ver-perfil" href="#" class="btn btn-secundario">Ver perfil completo</a>
         </div>
 
         <div id="FamilyChart" class="f3"></div>
@@ -84,18 +81,21 @@ async function iniciarArvore() {
         .setAncestryDepth(4)
         .setProgenyDepth(4);
 
-    chart.setCardHtml()
+    const card = chart.setCardHtml()
         .setCardDisplay([['nome'], ['datas']])
         .setStyle('imageCircleRect');
 
     // --- Edição visual: adicionar pessoas e relações direto na árvore ---
-    // Cada mudança (pessoa nova, edição de nome/datas, parente desvinculado) é
-    // enviada ao servidor pra sincronizar com o banco. Exclusão de pessoa é
-    // bloqueada aqui de propósito — isso continua exigindo confirmação no
-    // perfil completo, pra evitar apagar alguém sem querer direto na árvore.
+    // setCardClickOpen liga o clique no card ao formulário de edição — é o modo
+    // "Edit First" da biblioteca: clicar em alguém abre o formulário E mostra os
+    // botões "+ Adicionar pai/mãe/cônjuge/filho" direto ao redor dela na árvore.
+    // Cada mudança é enviada ao servidor e sincronizada com o banco de forma
+    // aditiva e segura: exclusão de pessoa é bloqueada aqui de propósito (continua
+    // exigindo confirmação no perfil completo).
     let sincronizando = false;
     const editTree = chart.editTree()
         .setFields(['nome', 'nascimento', 'falecimento'])
+        .setCardClickOpen(card)
         .setOnChange(async () => {
             if (sincronizando) return;
             sincronizando = true;
@@ -124,11 +124,6 @@ async function iniciarArvore() {
         .setOnDelete((datum, deletePerson, postSubmit) => {
             alert('Pra excluir uma pessoa, abra o perfil completo dela e use o botão "Excluir pessoa" (pede confirmação). Isso evita apagar alguém sem querer direto pela árvore.');
         });
-
-    document.getElementById('btn-editar-foco').addEventListener('click', () => {
-        const principal = chart.getMainDatum();
-        if (principal) editTree.open(principal);
-    });
 
     const btnPerfil = document.getElementById('btn-ver-perfil');
 
