@@ -6,7 +6,7 @@ Esta versão mantém o projeto simples de hospedar com nginx, PHP-FPM 8.3 e Mari
 
 A aplicação agora possui **espaços de família**. Uma conta pode participar de vários espaços e cada espaço tem seus próprios dados. O papel `owner` administra membros e pode compartilhar o espaço; `editor` cria e atualiza pessoas, relações e mídias; `viewer` acessa a árvore e os perfis em modo somente leitura.
 
-A árvore deixou de depender de biblioteca carregada por CDN. O novo explorador `public/js/tree-explorer.js` desenha SVG no navegador e mostra uma janela contextual da genealogia: ascendentes acima, descendentes abaixo, cônjuges lateralmente e a pessoa selecionada sempre destacada. A navegação inclui busca, foco por URL, zoom, pan, enquadramento e profundidade independente de gerações.
+A árvore não depende de biblioteca carregada por CDN. O renderer `public/js/tree-view.js` usa cartões HTML legíveis sobre uma camada SVG de conexões: ascendentes acima, descendentes abaixo, cônjuges lateralmente e a pessoa selecionada sempre destacada. A navegação inclui busca, foco por URL, zoom, pan, enquadramento, painel recolhível e profundidade independente de gerações. Os cartões também podem ser percorridos por teclado com as setas; Enter abre o perfil.
 
 A tabela `auditoria` registra as principais criações, alterações e exclusões vinculadas ao espaço ativo. O isolamento é aplicado no domínio por `familia_id`, nas relações verificando as duas pessoas e nas mídias verificando o vínculo com a pessoa da família atual.
 
