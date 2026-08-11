@@ -30,7 +30,7 @@ $familias = listarFamiliasDoUsuario();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Painel · <?= htmlspecialchars(familiaAtualNome() ?: 'Árvore Familiar') ?></title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=e928b1d">
 </head>
 <body>
 <header class="topo">

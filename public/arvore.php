@@ -12,7 +12,7 @@ $familiaNome = familiaAtualNome() ?: 'Família ativa';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Árvore · <?= htmlspecialchars($familiaNome) ?></title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=e928b1d">
 </head>
 <body class="tree-page-body">
 <header class="topo">
@@ -99,7 +99,7 @@ $familiaNome = familiaAtualNome() ?: 'Família ativa';
     </div>
 </main>
 
-<script src="js/tree-view.js"></script>
+<script src="js/tree-view.js?v=e928b1d"></script>
 <script>
   window.addEventListener('DOMContentLoaded', () => {
     const tree = new FamilyTreeView({

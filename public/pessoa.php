@@ -92,7 +92,7 @@ $rotulosTipoNome = [
 <head>
     <meta charset="UTF-8">
     <title><?= htmlspecialchars($pessoa['nome_completo']) ?> - Árvore Familiar</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=e928b1d">
 </head>
 <body>
 <header class="topo">
