@@ -12,7 +12,7 @@ $familiaNome = familiaAtualNome() ?: 'Família ativa';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Árvore · <?= htmlspecialchars($familiaNome) ?></title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="css/style.css?v=e928b1d">
+    <link rel="stylesheet" href="css/style.css?v=tree-controls-1">
 </head>
 <body class="tree-page-body">
 <header class="topo">
@@ -56,6 +56,15 @@ $familiaNome = familiaAtualNome() ?: 'Família ativa';
             </div>
             <label class="tree-range" for="tree-ancestors">Acima <input id="tree-ancestors" type="range" min="1" max="5" value="2" aria-label="Gerações acima"></label>
             <label class="tree-range" for="tree-descendants">Abaixo <input id="tree-descendants" type="range" min="1" max="5" value="2" aria-label="Gerações abaixo"></label>
+            <label class="tree-sort" for="tree-sort">Ordenar
+                <select id="tree-sort" aria-label="Ordenar cartões da árvore">
+                    <option value="nome_asc">Nome (A–Z)</option>
+                    <option value="nome_desc">Nome (Z–A)</option>
+                    <option value="nascimento_asc">Nascimento mais antigo</option>
+                    <option value="nascimento_desc">Nascimento mais recente</option>
+                    <option value="atualizado_desc">Atualizados recentemente</option>
+                </select>
+            </label>
             <span class="tree-status" id="tree-status" role="status" aria-live="polite">Carregando a árvore…</span>
         </div>
 
@@ -99,7 +108,7 @@ $familiaNome = familiaAtualNome() ?: 'Família ativa';
     </div>
 </main>
 
-<script src="js/tree-view.js?v=e928b1d"></script>
+<script src="js/tree-view.js?v=tree-controls-1"></script>
 <script>
   window.addEventListener('DOMContentLoaded', () => {
     const tree = new FamilyTreeView({
@@ -112,6 +121,7 @@ $familiaNome = familiaAtualNome() ?: 'Família ativa';
       descendantRange: '#tree-descendants',
       status: '#tree-status',
       zoomLabel: '#tree-zoom',
+      sort: '#tree-sort',
       empty: '#tree-empty',
     });
     tree.load();

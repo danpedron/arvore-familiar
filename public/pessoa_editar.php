@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <title><?= $pessoa ? 'Editar' : 'Nova' ?> pessoa - Árvore Familiar</title>
-    <link rel="stylesheet" href="css/style.css?v=e928b1d">
+    <link rel="stylesheet" href="css/style.css?v=tree-controls-1">
 </head>
 <body>
 <header class="topo">

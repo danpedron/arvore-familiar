@@ -278,3 +278,25 @@ form label { display: block; margin-top: 15px; color: #425149; font-size: 13px; 
   .tree-card { transform: none; }
   .tree-legend { display: none; }
 }
+
+/* Refinamentos do painel e ordenação */
+.stat-card { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.stat-hint { color: var(--muted); font-size: 11px; }
+.list-controls { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.list-controls .searchbar { min-width: 220px; }
+.sort-control { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 750; white-space: nowrap; }
+.sort-control select { width: auto; min-width: 190px; margin: 0; padding: 10px 32px 10px 11px; color: var(--ink); background-color: #fff; border: 1px solid var(--line-strong); border-radius: 8px; font-size: 12px; font-weight: 650; }
+.sort-control select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(31, 91, 67, .1); outline: none; }
+@media (max-width: 900px) {
+  .list-controls { width: 100%; justify-content: flex-start; }
+  .list-controls .searchbar { flex: 1 1 240px; }
+}
+@media (max-width: 560px) {
+  .sort-control { width: 100%; justify-content: space-between; }
+  .sort-control select { flex: 1; }
+}
+
+.tree-sort { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 750; white-space: nowrap; }
+.tree-sort select { width: auto; min-width: 178px; margin: 0; padding: 9px 29px 9px 10px; color: var(--ink); background: #fff; border: 1px solid var(--line-strong); border-radius: 8px; font-size: 12px; font-weight: 650; }
+.tree-sort select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(31, 91, 67, .1); outline: none; }
+@media (max-width: 1050px) { .tree-sort { flex: 1 1 220px; } .tree-sort select { flex: 1; } }

@@ -99,16 +99,27 @@ function criarPessoaBasica(array $campos): int {
     return (int) $pdo->lastInsertId();
 }
 
-function listarPessoas(string $busca = ''): array {
+function listarPessoas(string $busca = '', string $ordenar = 'nome_asc'): array {
     $pdo = getConexao();
     $familiaId = contextoFamiliaId();
+    $ordens = [
+        'nome_asc' => 'nome_completo COLLATE utf8mb4_general_ci ASC, id ASC',
+        'nome_desc' => 'nome_completo COLLATE utf8mb4_general_ci DESC, id DESC',
+        'nascimento_asc' => 'data_nascimento IS NULL ASC, data_nascimento ASC, nome_completo COLLATE utf8mb4_general_ci ASC',
+        'nascimento_desc' => 'data_nascimento IS NULL ASC, data_nascimento DESC, nome_completo COLLATE utf8mb4_general_ci ASC',
+        'atualizado_desc' => 'atualizado_em DESC, nome_completo COLLATE utf8mb4_general_ci ASC',
+        'criado_desc' => 'criado_em DESC, nome_completo COLLATE utf8mb4_general_ci ASC',
+    ];
+    $orderBy = $ordens[$ordenar] ?? $ordens['nome_asc'];
+    $sql = "SELECT * FROM pessoas WHERE familia_id = ?";
+    $params = [$familiaId];
     if ($busca !== '') {
-        $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE familia_id = ? AND nome_completo LIKE ? ORDER BY nome_completo');
-        $stmt->execute([$familiaId, '%' . $busca . '%']);
-    } else {
-        $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE familia_id = ? ORDER BY nome_completo');
-        $stmt->execute([$familiaId]);
+        $sql .= ' AND nome_completo LIKE ?';
+        $params[] = '%' . $busca . '%';
     }
+    $sql .= " ORDER BY $orderBy";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     return $stmt->fetchAll();
 }
 

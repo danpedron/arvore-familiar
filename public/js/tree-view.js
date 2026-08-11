@@ -16,6 +16,7 @@
       this.descendantRange = document.querySelector(options.descendantRange);
       this.status = document.querySelector(options.status);
       this.zoomLabel = document.querySelector(options.zoomLabel);
+      this.sortSelect = document.querySelector(options.sort);
       this.empty = document.querySelector(options.empty);
       this.nodes = [];
       this.byId = new Map();
@@ -27,6 +28,7 @@
       this.pointer = null;
       this.firstRender = true;
       this.panelOpen = true;
+      this.sortMode = this.sortSelect?.value || 'nome_asc';
 
       if (!this.viewport || !this.stage) throw new Error('A área da árvore não foi encontrada.');
       this.createWorld();
@@ -84,6 +86,9 @@
           shortName: String(data.nomeCurto || name.split(/\s+/)[0] || name),
           gender: String(data.gender || data.sexo || 'neutral').toLowerCase(),
           dates: String(data.datas || this.formatDates(data) || 'Datas não informadas'),
+          birthDate: String(data.nascimento || data.data_nascimento || ''),
+          createdAt: String(data.criadoEm || data.criado_em || ''),
+          updatedAt: String(data.atualizadoEm || data.atualizado_em || ''),
           birthPlace: String(data.localNascimento || data.local_nascimento || ''),
           photo: String(data.avatar || data.foto_perfil || data.foto || ''),
           parents: this.ids(rels.parents || raw.pais),
@@ -134,8 +139,13 @@
         }
         if (event.key === 'Enter') {
           const first = this.results?.querySelector('[data-search-id]');
-          if (first) this.select(first.dataset.searchId);
+          if (first) this.select(first.dataset.searchId, { center: true });
         }
+      });
+
+      this.sortSelect?.addEventListener('change', () => {
+        this.sortMode = this.sortSelect.value || 'nome_asc';
+        this.render({ preserve: true });
       });
 
       this.ancestorRange?.addEventListener('input', () => this.render({ center: true }));
@@ -227,12 +237,7 @@
         rows.get(generation).push(id);
       });
 
-      const orderIndex = new Map(this.graph.order.map((id, index) => [id, index]));
-      rows.forEach((ids) => ids.sort((a, b) => {
-        if (a === this.focusId) return -1;
-        if (b === this.focusId) return 1;
-        return (orderIndex.get(a) || 0) - (orderIndex.get(b) || 0);
-      }));
+      rows.forEach((ids) => ids.sort((a, b) => this.compareNodes(a, b)));
 
       const widest = Math.max(...Array.from(rows.values()).map((row) => row.length), 1);
       const width = Math.max(this.viewport.clientWidth || 1000, widest * (CARD.width + LAYOUT.gapX) + LAYOUT.paddingX * 2);
@@ -257,7 +262,8 @@
       this.setWorldSize(width, height);
       this.drawLinks();
       this.drawCards();
-      this.setStatus(`${this.visibleIds.size} pessoas visíveis · foco em ${this.byId.get(this.focusId)?.name || '—'}`);
+      const labels = { nome_asc: 'nome A–Z', nome_desc: 'nome Z–A', nascimento_asc: 'nascimento antigo', nascimento_desc: 'nascimento recente', atualizado_desc: 'atualização recente' };
+      this.setStatus(`${this.visibleIds.size} pessoas visíveis · ${labels[this.sortMode] || 'ordenação'} · foco em ${this.byId.get(this.focusId)?.name || '—'}`);
       this.updatePanel();
 
       requestAnimationFrame(() => {
@@ -265,6 +271,28 @@
         else if (options.center) this.centerFocus();
         this.firstRender = false;
       });
+    }
+
+    compareNodes(firstId, secondId) {
+      const first = this.byId.get(String(firstId));
+      const second = this.byId.get(String(secondId));
+      if (!first || !second) return 0;
+      if (this.sortMode === 'nome_desc') return this.compareText(second.name, first.name);
+      if (this.sortMode === 'nascimento_asc') return this.compareDate(first.birthDate, second.birthDate) || this.compareText(first.name, second.name);
+      if (this.sortMode === 'nascimento_desc') return this.compareDate(second.birthDate, first.birthDate) || this.compareText(first.name, second.name);
+      if (this.sortMode === 'atualizado_desc') return this.compareDate(second.updatedAt, first.updatedAt) || this.compareText(first.name, second.name);
+      return this.compareText(first.name, second.name);
+    }
+
+    compareText(first, second) {
+      return String(first || '').localeCompare(String(second || ''), 'pt-BR', { sensitivity: 'base', numeric: true });
+    }
+
+    compareDate(first, second) {
+      const firstValue = first ? Date.parse(first) : Number.POSITIVE_INFINITY;
+      const secondValue = second ? Date.parse(second) : Number.POSITIVE_INFINITY;
+      if (firstValue === secondValue) return 0;
+      return firstValue < secondValue ? -1 : 1;
     }
 
     setWorldSize(width, height) {
@@ -392,30 +420,51 @@
     }
 
     cardKeydown(event, node) {
-      const list = event.key === 'ArrowUp' ? node.parents : event.key === 'ArrowDown' ? node.children : node.spouses;
       if (event.key === 'Enter') {
         window.location.href = `pessoa.php?id=${encodeURIComponent(node.id)}`;
         return;
       }
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        event.preventDefault();
-        const index = Math.max(0, list.indexOf(node.id));
-        const target = list[index] || list[0];
-        if (target && this.byId.has(target)) this.select(target);
-      } else if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && list[0]) {
-        event.preventDefault();
-        this.select(list[0]);
-      }
+      const target = this.keyboardTarget(node, event.key);
+      if (!target) return;
+      event.preventDefault();
+      this.select(target, { center: event.key === 'ArrowUp' || event.key === 'ArrowDown' });
     }
 
-    select(id) {
+    keyboardTarget(node, key) {
+      const position = this.positions.get(node.id);
+      if (!position) return null;
+      if (key === 'ArrowUp' || key === 'ArrowDown') {
+        const candidates = (key === 'ArrowUp' ? node.parents : node.children)
+          .filter((id) => this.visibleIds.has(id) && this.positions.has(id));
+        return this.closestByX(candidates, position.x);
+      }
+      if (key !== 'ArrowLeft' && key !== 'ArrowRight') return null;
+      const spouses = node.spouses.filter((id) => this.visibleIds.has(id) && this.positions.has(id));
+      if (spouses.length) {
+        const directional = spouses
+          .sort((a, b) => this.positions.get(a).x - this.positions.get(b).x)
+          .filter((id) => key === 'ArrowLeft' ? this.positions.get(id).x < position.x : this.positions.get(id).x > position.x);
+        return directional[0] || (key === 'ArrowLeft' ? spouses[spouses.length - 1] : spouses[0]);
+      }
+      const row = [...this.visibleIds]
+        .filter((id) => id !== node.id && this.graph.generations.get(id) === this.graph.generations.get(node.id))
+        .sort((a, b) => this.positions.get(a).x - this.positions.get(b).x);
+      const directional = row.filter((id) => key === 'ArrowLeft' ? this.positions.get(id).x < position.x : this.positions.get(id).x > position.x);
+      return directional[0] || (key === 'ArrowLeft' ? row[row.length - 1] : row[0]) || null;
+    }
+
+    closestByX(ids, x) {
+      return ids.sort((a, b) => Math.abs(this.positions.get(a).x - x) - Math.abs(this.positions.get(b).x - x))[0] || null;
+    }
+
+    select(id, options = {}) {
       id = String(id);
       if (!this.byId.has(id)) return;
       this.focusId = id;
       const url = new URL(window.location.href);
       url.searchParams.set('foco', id);
       window.history.replaceState({}, '', url);
-      this.render({ center: true });
+      this.render(options.center ? { center: true } : { preserve: true });
       this.search?.blur();
       if (this.results) this.results.hidden = true;
     }
@@ -459,7 +508,7 @@
         const dates = document.createElement('span');
         dates.textContent = node.dates;
         button.append(title, dates);
-        button.addEventListener('click', () => this.select(node.id));
+        button.addEventListener('click', () => this.select(node.id, { center: true }));
         this.results.append(button);
       });
       this.results.hidden = matches.length === 0;
@@ -510,7 +559,7 @@
       const button = document.querySelector('[data-tree-action="toggle-panel"]');
       if (button) {
         button.setAttribute('aria-pressed', String(this.panelOpen));
-        button.textContent = this.panelOpen ? 'Detalhes' : 'Detalhes';
+        button.textContent = this.panelOpen ? 'Ocultar detalhes' : 'Mostrar detalhes';
       }
       window.setTimeout(() => this.fitVisible(), 180);
     }

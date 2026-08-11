@@ -6,23 +6,43 @@ exigirFamilia();
 $pdo = getConexao();
 $familiaId = familiaAtualId();
 $busca = trim($_GET['busca'] ?? '');
-$pessoas = listarPessoas($busca);
+$ordenar = $_GET['ordenar'] ?? 'nome_asc';
+$opcoesOrdenacao = [
+    'nome_asc' => 'Nome (A–Z)',
+    'nome_desc' => 'Nome (Z–A)',
+    'nascimento_asc' => 'Nascimento mais antigo',
+    'nascimento_desc' => 'Nascimento mais recente',
+    'atualizado_desc' => 'Atualizados recentemente',
+    'criado_desc' => 'Adicionados recentemente',
+];
+if (!array_key_exists($ordenar, $opcoesOrdenacao)) $ordenar = 'nome_asc';
+$pessoas = listarPessoas($busca, $ordenar);
 
 $stmt = $pdo->prepare(
-    'SELECT COUNT(*) AS total,
-            COALESCE(SUM(falecido = 0), 0) AS vivas,
-            COALESCE(SUM(falecido = 1), 0) AS falecidas,
-            COALESCE(SUM(data_nascimento IS NULL), 0) AS sem_datas
+    'SELECT COUNT(*) AS total
      FROM pessoas WHERE familia_id = ?'
 );
 $stmt->execute([$familiaId]);
-$estatisticas = $stmt->fetch() ?: ['total' => 0, 'vivas' => 0, 'falecidas' => 0, 'sem_datas' => 0];
+$estatisticas = $stmt->fetch() ?: ['total' => 0];
+
+$stmt = $pdo->prepare(
+    "SELECT
+        COUNT(DISTINCT CASE WHEN m.tipo = 'foto' THEN m.id END) AS fotos,
+        COUNT(DISTINCT CASE WHEN m.tipo = 'documento' THEN m.id END) AS documentos
+     FROM midias m
+     INNER JOIN midia_pessoa mp ON mp.midia_id = m.id
+     INNER JOIN pessoas p ON p.id = mp.pessoa_id
+     WHERE p.familia_id = ?"
+);
+$stmt->execute([$familiaId]);
+$acervo = $stmt->fetch() ?: ['fotos' => 0, 'documentos' => 0];
+
+$familias = listarFamiliasDoUsuario();
 
 $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE familia_id = ? ORDER BY atualizado_em DESC LIMIT 6');
 $stmt->execute([$familiaId]);
 $recentes = $stmt->fetchAll();
 
-$familias = listarFamiliasDoUsuario();
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -30,7 +50,7 @@ $familias = listarFamiliasDoUsuario();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Painel · <?= htmlspecialchars(familiaAtualNome() ?: 'Árvore Familiar') ?></title>
-    <link rel="stylesheet" href="css/style.css?v=e928b1d">
+    <link rel="stylesheet" href="css/style.css?v=tree-controls-1">
 </head>
 <body>
 <header class="topo">
@@ -58,19 +78,26 @@ $familias = listarFamiliasDoUsuario();
     </div>
 
     <div class="stats-grid">
-        <div class="surface stat-card"><span class="stat-label">Pessoas</span><strong class="stat-value"><?= (int) $estatisticas['total'] ?></strong></div>
-        <div class="surface stat-card"><span class="stat-label">Vivas</span><strong class="stat-value"><?= (int) $estatisticas['vivas'] ?></strong></div>
-        <div class="surface stat-card"><span class="stat-label">Falecidas</span><strong class="stat-value"><?= (int) $estatisticas['falecidas'] ?></strong></div>
-        <div class="surface stat-card"><span class="stat-label">A completar</span><strong class="stat-value"><?= (int) $estatisticas['sem_datas'] ?></strong></div>
+        <div class="surface stat-card"><span class="stat-label">Pessoas</span><strong class="stat-value"><?= (int) $estatisticas['total'] ?></strong><span class="stat-hint">registros no espaço</span></div>
+        <div class="surface stat-card"><span class="stat-label">Fotos</span><strong class="stat-value"><?= (int) $acervo['fotos'] ?></strong><span class="stat-hint">itens do acervo</span></div>
+        <div class="surface stat-card"><span class="stat-label">Documentos</span><strong class="stat-value"><?= (int) $acervo['documentos'] ?></strong><span class="stat-hint">itens do acervo</span></div>
+        <div class="surface stat-card"><span class="stat-label">Espaços</span><strong class="stat-value"><?= count($familias) ?></strong><span class="stat-hint">famílias acessíveis</span></div>
     </div>
 
     <div class="dashboard-layout">
         <section class="surface panel">
             <div class="panel-header">
-                <div><h2><?= $busca !== '' ? 'Resultados da busca' : 'Pessoas da família' ?></h2><span class="muted small"><?= count($pessoas) ?> registro(s) neste espaço</span></div>
-                <form class="searchbar" method="get" role="search">
-                    <span class="search-icon">⌕</span>
-                    <input type="search" name="busca" placeholder="Buscar pessoa…" value="<?= htmlspecialchars($busca) ?>" aria-label="Buscar pessoa">
+                <div><h2><?= $busca !== '' ? 'Resultados da busca' : 'Pessoas da família' ?></h2><span class="muted small"><?= count($pessoas) ?> registro(s) neste espaço · <?= htmlspecialchars($opcoesOrdenacao[$ordenar]) ?></span></div>
+                <form class="list-controls" method="get" role="search">
+                    <div class="searchbar">
+                        <span class="search-icon">⌕</span>
+                        <input type="search" name="busca" placeholder="Buscar pessoa…" value="<?= htmlspecialchars($busca) ?>" aria-label="Buscar pessoa">
+                    </div>
+                    <label class="sort-control">Ordenar por
+                        <select name="ordenar" onchange="this.form.submit()" aria-label="Ordenar pessoas">
+                            <?php foreach ($opcoesOrdenacao as $valor => $rotulo): ?><option value="<?= htmlspecialchars($valor) ?>" <?= $ordenar === $valor ? 'selected' : '' ?>><?= htmlspecialchars($rotulo) ?></option><?php endforeach; ?>
+                        </select>
+                    </label>
                 </form>
             </div>
             <?php if (empty($pessoas)): ?>

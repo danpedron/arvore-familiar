@@ -80,7 +80,7 @@ if ($familiaSelecionada) {
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=e928b1d">
+    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=tree-controls-1">
 </head>
 <body>
 <header class="topo"><a class="brand" href="index.php">Árvore Familiar</a><nav><a href="index.php">Painel</a><a href="arvore.php">Explorar árvore</a><a href="familias.php" aria-current="page">Famílias</a><span class="user-chip"><?= htmlspecialchars(usuarioAtualNome() ?: '') ?></span><a href="logout.php">Sair</a></nav></header>
