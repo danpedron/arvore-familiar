@@ -1,157 +1,105 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
-exigirLogin();
+require_once __DIR__ . '/../includes/functions.php';
+exigirFamilia();
+
+$pdo = getConexao();
+$familiaId = familiaAtualId();
+$stmt = $pdo->prepare('SELECT COUNT(*) AS total, SUM(falecido = 0) AS vivas, SUM(falecido = 1) AS falecidas FROM pessoas WHERE familia_id = ?');
+$stmt->execute([$familiaId]);
+$totais = $stmt->fetch() ?: ['total' => 0, 'vivas' => 0, 'falecidas' => 0];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Árvore Genealógica - Árvore Familiar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Explorar árvore · <?= htmlspecialchars(familiaAtualNome() ?: 'Árvore Familiar') ?></title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://unpkg.com/family-chart@0.9.0/dist/styles/family-chart.css">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/family-chart@0.9.0/dist/family-chart.min.js"></script>
-    <style>
-        #FamilyChart { width: 100%; height: 78vh; background: #f2f1ee; border-radius: 10px; }
-        .no-dados { text-align: center; padding: 60px 20px; color: #777; }
-        .barra-arvore { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-        .barra-arvore .f3-search-cont { position: relative; min-width: 240px; }
-        #btn-ver-perfil { display: none; }
-        .legenda { display: flex; gap: 20px; font-size: 0.85em; color: #666; margin-top: 10px; flex-wrap: wrap; }
-        .legenda span { display: inline-flex; align-items: center; gap: 6px; }
-        .legenda .bolinha { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
-
-        /* A biblioteca desenha as linhas de conexão com stroke="#fff" fixo via JS,
-           pensado pro fundo escuro que ela usa por padrão (o "tema claro" do
-           site oficial também sobrescreve isso por CSS, do mesmo jeito). */
-        .f3 .link { stroke: #b7b2a6 !important; stroke-width: 2px !important; }
-        .f3 .link.f3-path-to-main { stroke: #8a8578 !important; stroke-width: 2.5px !important; }
-    </style>
 </head>
 <body>
 <header class="topo">
-    <a href="index.php">🌳 Árvore Familiar</a>
+    <a class="brand" href="index.php">Árvore Familiar</a>
     <nav>
-        <a href="index.php">Lista de pessoas</a>
+        <a href="index.php">Painel</a>
+        <a href="arvore.php" aria-current="page">Explorar árvore</a>
+        <a href="familias.php">Famílias</a>
+        <span class="user-chip"><?= htmlspecialchars(usuarioAtualNome() ?: '') ?></span>
         <a href="logout.php">Sair</a>
     </nav>
 </header>
 
-<div class="container">
-    <div class="card">
-        <h1 style="margin-top:0;">Árvore genealógica</h1>
-        <p style="color:#666;">Clique em uma pessoa para editá-la e ver botões de "+ adicionar" pai/mãe/cônjuge/filho direto ao redor dela. Use a busca pra pular direto pra alguém, ou o botão abaixo pra ver o perfil completo (fotos, documentos etc). Pra manter a navegação rápida, só as gerações mais próximas de quem está em foco são desenhadas.</p>
-
-        <div class="barra-arvore">
-            <div id="busca-pessoa-cont" class="f3-search-cont"></div>
-            <a id="btn-ver-perfil" href="#" class="btn btn-secundario">Ver perfil completo</a>
+<main class="tree-page">
+    <div class="tree-intro">
+        <div>
+            <span class="eyebrow">Explorador genealógico</span>
+            <h1>A história da família, em contexto.</h1>
+            <p>Navegue por ascendentes e descendentes sem perder o foco. Clique em qualquer pessoa para torná-la o centro da história; arraste para percorrer e use o zoom para abrir novas ramificações.</p>
         </div>
-
-        <div id="FamilyChart" class="f3"></div>
-
-        <div class="legenda">
-            <span><span class="bolinha" style="background:rgb(120,159,172);"></span> Masculino</span>
-            <span><span class="bolinha" style="background:rgb(196,138,146);"></span> Feminino</span>
-            <span>🕊️ antes das datas indica falecido(a)</span>
-        </div>
+        <div class="family-badge"><span>◈</span> <?= htmlspecialchars(familiaAtualNome() ?: 'Família ativa') ?></div>
     </div>
-</div>
 
+    <section class="tree-shell" aria-label="Explorador da árvore genealógica">
+        <div class="tree-toolbar">
+            <div class="tree-search">
+                <span class="search-icon">⌕</span>
+                <input id="tree-search" type="search" autocomplete="off" placeholder="Buscar uma pessoa pelo nome…" aria-label="Buscar pessoa">
+                <div class="search-results" data-search-results hidden></div>
+            </div>
+            <div class="toolbar-group" aria-label="Controles de visualização">
+                <button class="icon-btn" type="button" data-tree-action="zoom-out" title="Diminuir zoom" aria-label="Diminuir zoom">−</button>
+                <button class="icon-btn" type="button" data-tree-action="zoom-in" title="Aumentar zoom" aria-label="Aumentar zoom">+</button>
+                <button class="icon-btn" type="button" data-tree-action="fit" title="Enquadrar árvore" aria-label="Enquadrar árvore">□</button>
+                <button class="icon-btn" type="button" data-tree-action="center" title="Centralizar pessoa em foco" aria-label="Centralizar pessoa em foco">◎</button>
+            </div>
+            <label>Ascendentes <input id="tree-ancestors" type="range" min="1" max="5" value="3" aria-label="Profundidade de ascendentes"></label>
+            <label>Descendentes <input id="tree-descendants" type="range" min="1" max="5" value="3" aria-label="Profundidade de descendentes"></label>
+            <span class="tree-status" id="tree-status">Carregando…</span>
+        </div>
+        <div class="tree-workspace">
+            <div class="tree-viewport" id="tree-viewport">
+                <div class="tree-stage" id="tree-stage"></div>
+            </div>
+            <aside class="tree-side" id="tree-person-panel" aria-live="polite">
+                <div class="person-summary">
+                    <span class="side-label">Pessoa em foco</span>
+                    <h2 data-person-name>Selecione alguém</h2>
+                    <p class="summary-dates" data-person-dates>—</p>
+                    <p class="summary-location" data-person-location>—</p>
+                    <p class="summary-relations" data-person-relations>—</p>
+                </div>
+                <div>
+                    <a class="btn" data-person-profile href="index.php">Abrir perfil</a>
+                    <a class="btn btn-secundario" href="pessoa_editar.php">Adicionar pessoa</a>
+                </div>
+                <div class="tree-guide">
+                    <strong>Dica de navegação</strong>
+                    <p>O enquadramento começa compacto para facilitar a leitura. Aumente a profundidade de gerações quando quiser ampliar o contexto, ou arraste o fundo para percorrer a árvore.</p>
+                </div>
+            </aside>
+        </div>
+    </section>
+    <div class="tree-legend">
+        <span><i class="legend-dot" style="background:#b9d1dc"></i> Masculino</span>
+        <span><i class="legend-dot" style="background:#dfbdc4"></i> Feminino</span>
+        <span>Linhas contínuas indicam parentesco</span>
+        <span>Linhas tracejadas indicam união</span>
+    </div>
+</main>
+<script src="js/tree-explorer.js"></script>
 <script>
-async function iniciarArvore() {
-    const resp = await fetch('arvore_dados.php');
-    const dados = await resp.json();
-
-    const contChart = document.getElementById('FamilyChart');
-
-    if (!dados || dados.length === 0) {
-        contChart.outerHTML = '<div class="no-dados">Nenhuma pessoa cadastrada ainda. <a href="pessoa_editar.php">Adicione a primeira pessoa</a> para ver a árvore.</div>';
-        document.querySelector('.barra-arvore').remove();
-        return;
-    }
-
-    const chart = f3.createChart('#FamilyChart', dados)
-        .setTransitionTime(700)
-        .setShowSiblingsOfMain(true)
-        .setCardXSpacing(280)
-        .setCardYSpacing(220)
-        .setAncestryDepth(4)
-        .setProgenyDepth(4)
-        .setDuplicateBranchToggle(true);
-
-    const card = chart.setCardHtml()
-        .setCardDisplay([['nome'], ['datas']])
-        .setStyle('imageRect');
-
-    // --- Edição visual: adicionar pessoas e relações direto na árvore ---
-    // setCardClickOpen liga o clique no card ao formulário de edição — é o modo
-    // "Edit First" da biblioteca: clicar em alguém abre o formulário E mostra os
-    // botões "+ Adicionar pai/mãe/cônjuge/filho" direto ao redor dela na árvore.
-    // Cada mudança é enviada ao servidor e sincronizada com o banco de forma
-    // aditiva e segura: exclusão de pessoa é bloqueada aqui de propósito (continua
-    // exigindo confirmação no perfil completo).
-    let sincronizando = false;
-    const editTree = chart.editTree()
-        .setFields(['nome', 'nascimento', 'falecimento'])
-        .setCardClickOpen(card)
-        .setOnChange(async () => {
-            if (sincronizando) return;
-            sincronizando = true;
-            try {
-                const dadosAtuais = editTree.exportData();
-                const resp = await fetch('arvore_salvar.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: dadosAtuais }),
-                });
-                const resultado = await resp.json();
-                if (!resultado.sucesso) {
-                    alert('Não foi possível salvar essa alteração: ' + (resultado.erro || 'erro desconhecido'));
-                    return;
-                }
-                // Recarrega os dados oficiais do banco (garante IDs corretos pra quem acabou de ser criado)
-                const dadosAtualizados = await (await fetch('arvore_dados.php')).json();
-                chart.updateData(dadosAtualizados);
-                chart.updateTree({ initial: false });
-            } catch (e) {
-                alert('Erro de conexão ao salvar. Recarregue a página pra conferir se a alteração foi salva.');
-            } finally {
-                sincronizando = false;
-            }
-        })
-        .setOnDelete((datum, deletePerson, postSubmit) => {
-            alert('Pra excluir uma pessoa, abra o perfil completo dela e use o botão "Excluir pessoa" (pede confirmação). Isso evita apagar alguém sem querer direto pela árvore.');
-        });
-
-    const btnPerfil = document.getElementById('btn-ver-perfil');
-
-    // Sempre que a árvore recentraliza em alguém, atualiza o botão de perfil completo
-    chart.setAfterUpdate(() => {
-        const principal = chart.getMainDatum();
-        if (principal) {
-            btnPerfil.href = 'pessoa.php?id=' + principal.id;
-            btnPerfil.textContent = 'Ver perfil completo de ' + (principal.data.nome || '');
-            btnPerfil.style.display = 'inline-block';
-        }
+    const explorer = new TreeExplorer({
+        root: '#tree-stage',
+        stage: '#tree-stage',
+        viewport: '#tree-viewport',
+        panel: '#tree-person-panel',
+        search: '#tree-search',
+        ancestorRange: '#tree-ancestors',
+        descendantRange: '#tree-descendants',
+        status: '#tree-status',
+        badge: document.querySelector('.family-badge'),
     });
-
-    // Busca de pessoa por nome (dropdown com autocomplete já embutido na biblioteca)
-    chart.setPersonDropdown(d => d.data.nome, {
-        cont: document.getElementById('busca-pessoa-cont'),
-        placeholder: 'Buscar pessoa pelo nome...',
-    });
-
-    // Se a URL tiver ?foco=ID, começa centralizado nessa pessoa (útil ao vir do perfil de alguém)
-    const params = new URLSearchParams(window.location.search);
-    const focoId = params.get('foco');
-    if (focoId && dados.some(d => d.id === focoId)) {
-        chart.updateMainId(focoId);
-    }
-
-    chart.updateTree({ initial: true, tree_position: 'fit' });
-}
-
-iniciarArvore();
+    explorer.load();
 </script>
 </body>
 </html>

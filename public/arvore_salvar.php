@@ -7,8 +7,13 @@
  */
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-exigirLogin();
+exigirFamilia();
 header('Content-Type: application/json; charset=utf-8');
+if (!usuarioPodeEditar()) {
+    http_response_code(403);
+    echo json_encode(['sucesso' => false, 'erro' => 'Seu papel neste espaço permite apenas visualização.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 $corpo = json_decode(file_get_contents('php://input'), true);
 if (!is_array($corpo) || !isset($corpo['data']) || !is_array($corpo['data'])) {
@@ -24,7 +29,7 @@ try {
     $pdo->beginTransaction();
 
     // --- 1ª passada: garante que toda pessoa recebida existe no banco ---
-    $mapaIdParaReal = []; // id recebido do family-chart (string) => id real no banco (int)
+    $mapaIdParaReal = []; // id textual recebido pela interface => id real no banco
 
     foreach ($pessoasRecebidas as $pessoa) {
         if (!isset($pessoa['id'])) continue;

@@ -1,33 +1,43 @@
 # Configuração nginx para o projeto Árvore Familiar
-# Ambiente: localhost, Ubuntu, PHP 8.3.6, nginx 1.24.0
+# Produção: /var/www/arvore/public, PHP 8.3 FPM, HTTPS preferencial.
 
 server {
     listen 80;
-    server_name localhost;
+    server_name arvore.pedron.com.br localhost;
 
-    root /home/dan/projetos/arvore-familiar/public;
+    root /var/www/arvore/public;
     index index.php;
 
-    # Bloqueia execução de PHP dentro da pasta de uploads
+    # Arquivos ocultos, configurações e código fora da raiz pública nunca devem ser servidos.
+    location ~ /\. { deny all; }
+    location ~ ^/(config|includes|database|scripts|backups)(/|$) { deny all; }
+
+    # Mesmo que alguém consiga enviar um arquivo com extensão .php, ele não pode executar.
+    location ~* ^/uploads/.*\.php$ { deny all; }
     location ^~ /uploads/ {
-        location ~ \.php$ {
-            deny all;
-        }
+        try_files $uri =404;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Content-Disposition "inline" always;
+    }
+
+    # Assets versionados ou estáticos.
+    location ~* \.(?:css|js|svg|webp|png|jpg|jpeg|gif|ico|woff2?)$ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800, immutable";
+        try_files $uri =404;
     }
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
     }
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    }
-
-    # Impede acesso direto a arquivos de configuração/includes fora de public/
-    location ~ /(config|includes|database)/ {
-        deny all;
+        fastcgi_param HTTP_PROXY "";
     }
 }
-

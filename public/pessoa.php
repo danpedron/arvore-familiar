@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-exigirLogin();
+exigirFamilia();
+$podeEditar = usuarioPodeEditar();
 
 $id = (int) ($_GET['id'] ?? 0);
 $pessoa = buscarPessoa($id);
@@ -13,6 +14,10 @@ if (!$pessoa) {
 
 // Ações via POST (adicionar relações, nomes e mídias)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$podeEditar) {
+        http_response_code(403);
+        exit('Seu papel neste espaço permite apenas visualização.');
+    }
     $acao = $_POST['acao'] ?? '';
 
     if ($acao === 'add_pai' && !empty($_POST['pai_mae_id'])) {
@@ -127,12 +132,14 @@ $rotulosTipoNome = [
 
             <?php if ($pessoa['biografia']): ?><p><?= nl2br(htmlspecialchars($pessoa['biografia'])) ?></p><?php endif; ?>
 
-            <a href="pessoa_editar.php?id=<?= $id ?>" class="btn">Editar dados</a>
+            <?php if ($podeEditar): ?><a href="pessoa_editar.php?id=<?= $id ?>" class="btn">Editar dados</a><?php endif; ?>
             <a href="arvore.php?foco=<?= $id ?>" class="btn btn-secundario">Ver na árvore</a>
+            <?php if ($podeEditar): ?>
             <form method="post" style="display:inline;" onsubmit="return confirm('Excluir esta pessoa e todas as suas relações e mídias?');">
                 <input type="hidden" name="acao" value="excluir_pessoa">
-                <button type="submit" class="btn-perigo">Excluir pessoa</button>
+                <button type="submit" class="btn btn-perigo">Excluir pessoa</button>
             </form>
+            <?php endif; ?>
         </div>
     </div>
 

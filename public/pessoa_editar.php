@@ -1,7 +1,11 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-exigirLogin();
+exigirFamilia();
+if (!usuarioPodeEditar()) {
+    http_response_code(403);
+    exit('Seu papel neste espaço permite apenas visualização.');
+}
 
 $id = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $pessoa = $id ? buscarPessoa($id) : null;
@@ -73,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 <header class="topo">
-    <a href="index.php">🌳 Árvore Familiar</a>
+    <a class="brand" href="index.php">Árvore Familiar</a>
     <nav><a href="index.php">Voltar</a></nav>
 </header>
 

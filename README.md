@@ -22,6 +22,7 @@ Sistema simples e leve para registrar sua árvore genealógica, com fotos e docu
    mysql -u root -p < database/migracao_001_nomes_pessoa.sql
    mysql -u root -p < database/migracao_002_geolocalizacao.sql
    mysql -u root -p < database/migracao_003_midia_multipla.sql
+   mysql -u root -p < database/migracao_005_enterprise.sql
    ```
 
 2. **Configurar a conexão**
@@ -86,10 +87,12 @@ arvore-familiar/
 │   ├── login.php / registro.php / logout.php
 │   ├── pessoa.php            # Perfil da pessoa + relações + mídias
 │   ├── pessoa_editar.php     # Criar/editar pessoa
-│   ├── arvore.php            # Visualização gráfica da árvore (family-chart)
-│   ├── arvore_dados.php      # Endpoint JSON consumido pela árvore
+│   ├── arvore.php            # Explorador SVG com foco, zoom, busca e gerações
+│   ├── arvore_dados.php      # Endpoint JSON escopado pela família ativa
+│   ├── familias.php          # Espaços de família, papéis e compartilhamento
 │   ├── geocodificar.php      # Proxy para busca de locais (Nominatim/OSM)
 │   ├── js/busca-local.js     # Autocomplete de locais no formulário
+│   ├── js/tree-explorer.js   # Renderizador e interação da árvore
 │   ├── css/style.css
 │   └── uploads/               # Fotos e documentos enviados
 ├── nginx.conf.example       # Configuração de referência para nginx
@@ -101,6 +104,12 @@ arvore-familiar/
 sudo apt install php8.3-mbstring mariadb-client
 sudo systemctl restart php8.3-fpm
 ```
+
+## Espaços de família e papéis
+
+A migração `migracao_005_enterprise.sql` adiciona isolamento multi-família. Cada pessoa pertence a um único espaço, e cada usuário participa de um ou mais espaços com um papel: `owner` administra membros e configurações; `editor` cria e altera pessoas, relações e mídias; `viewer` navega e consulta sem alterar dados. A tela `familias.php` permite criar um novo espaço, alternar o contexto ativo e compartilhar o acesso com outra conta já cadastrada.
+
+A migração também cria a tabela `auditoria`, que registra as principais criações, atualizações e exclusões feitas pelo sistema. Em produção, recomenda-se manter o banco atrás de backups automáticos e restringir o acesso administrativo do MariaDB à máquina local.
 
 ## Como usar
 
@@ -202,24 +211,23 @@ O campo principal de cada pessoa (`nome_completo`) deve sempre ser o **nome de n
 
 Nas seções de Pais, Cônjuges e Filhos do perfil de uma pessoa, além de vincular alguém já cadastrado, há um botão "+ Cadastrar novo(a) ..." que abre o formulário de nova pessoa e, ao salvar, já cria o vínculo automaticamente — não é mais necessário cadastrar a pessoa antes e depois ir vinculá-la manualmente.
 
-## Visualização da árvore
+## Explorador da árvore
 
-Depois de duas tentativas com layout escrito à mão (força do D3 e depois um algoritmo hierárquico próprio) apresentarem bugs de posicionamento em famílias com casamentos "assimétricos" (cônjuge sem ancestrais cadastrados, múltiplos casamentos etc.), a página `arvore.php` passou a usar a biblioteca **[family-chart](https://github.com/donatso/family-chart)**, feita especificamente para árvores genealógicas — ela resolve internamente os casos que nosso código caseiro não tratava direito.
+A página `arvore.php` usa agora um explorador SVG próprio, sem dependência de CDN externa. O layout foi projetado para leitura progressiva: uma pessoa é o foco, ascendentes ficam acima, descendentes abaixo e uniões aparecem como conexões laterais tracejadas. Isso deixa o relacionamento espacial mais previsível e evita que famílias grandes abram uma tela impossível de ler de uma só vez.
 
 Funcionamento:
-- Clique em qualquer pessoa para centralizar a árvore nela e navegar pelos parentes (comportamento nativo da biblioteca).
-- Busca por nome no campo de texto acima da árvore, com autocomplete.
-- Botão "Ver perfil completo" sempre aponta para a pessoa atualmente centralizada, levando ao perfil de verdade (com fotos, documentos, relações editáveis etc. — a árvore em si é só visualização).
-- No perfil de cada pessoa há um link "Ver na árvore" que abre a árvore já centralizada nela (`arvore.php?foco=ID`).
-- `public/arvore_dados.php` só converte os dados do banco para o formato que a biblioteca espera (pessoas com `rels.parents/spouses/children`); todo o cálculo de posição, geração e desenho das linhas é feito pela biblioteca.
+- Clique em qualquer pessoa para centralizar a árvore nela.
+- Busca por nome com resultados rápidos e foco direto na pessoa encontrada.
+- Controles de zoom, enquadramento, centralização, arraste e profundidade independente de ascendentes/descendentes.
+- Painel lateral com datas, local, contagem de relações e acesso ao perfil completo.
+- O parâmetro `?foco=ID` continua sendo aceito para links compartilháveis.
+- `public/arvore_dados.php` devolve relações e metadados apenas da família ativa. O navegador calcula o subgrafo visível e desenha SVG de forma incremental, sem depender de CDN.
 
-A biblioteca é carregada via CDN (unpkg) tanto o JS quanto o CSS — não precisa instalar nada.
+## Próximos passos sugeridos
 
-## Próximos passos sugeridos (não incluídos nesta versão inicial)
-
-- **Importação/exportação GEDCOM**, caso queira migrar dados de/para o MyHeritage no futuro.
-- **Controle de permissões por usuário**, caso queira restringir quem edita o quê (hoje todo usuário logado pode editar tudo).
-- **Linha do tempo de eventos** (a tabela `eventos` já existe no schema, mas ainda não tem interface).
+- **Convites por e-mail com aceite por token**, aproveitando a tabela `convites_familia` já criada na migração.
+- **Linha do tempo de eventos**, usando a tabela `eventos` já existente no schema.
+- **Fontes e citações**, para conectar documentos e afirmações a registros históricos.
 
 ## Segurança
 

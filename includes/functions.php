@@ -1,6 +1,40 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
 
+function contextoFamiliaId(): int {
+    $id = function_exists('familiaAtualId') ? familiaAtualId() : null;
+    if (!$id) {
+        throw new RuntimeException('Nenhuma família ativa foi selecionada.');
+    }
+    return (int) $id;
+}
+
+function registrarAuditoria(string $entidade, ?int $entidadeId, string $acao, array $detalhes = []): void {
+    $familiaId = function_exists('familiaAtualId') ? familiaAtualId() : null;
+    if (!$familiaId) return;
+    $pdo = getConexao();
+    $stmt = $pdo->prepare(
+        'INSERT INTO auditoria (familia_id, usuario_id, entidade, entidade_id, acao, detalhes)
+         VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $familiaId,
+        function_exists('usuarioAtualId') ? usuarioAtualId() : null,
+        $entidade,
+        $entidadeId,
+        $acao,
+        $detalhes ? json_encode($detalhes, JSON_UNESCAPED_UNICODE) : null,
+    ]);
+}
+
+function exigirPessoaDaFamilia(int $pessoaId): array {
+    $pessoa = buscarPessoa($pessoaId);
+    if (!$pessoa) {
+        throw new RuntimeException('Pessoa não encontrada nesta família.');
+    }
+    return $pessoa;
+}
+
 // Placeholder local (SVG embutido, sem nenhuma requisição de rede) usado quando
 // a pessoa não tem foto ou quando o caminho salvo no banco aponta pra um arquivo
 // que não existe mais em disco (evita 404 no nginx e bloqueios por fail2ban).
@@ -40,7 +74,9 @@ function atualizarCamposBasicos(int $id, array $campos): void {
     $pdo = getConexao();
     $set = implode(', ', array_map(fn($c) => "$c = :$c", array_keys($campos)));
     $campos['id'] = $id;
-    $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id")->execute($campos);
+    $campos['familia_id'] = contextoFamiliaId();
+    $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id AND familia_id = :familia_id")->execute($campos);
+    registrarAuditoria('pessoa', $id, 'atualizacao_basica', ['campos' => array_keys($campos)]);
 }
 
 // Cria uma pessoa só com os campos básicos (usado quando alguém é adicionado
@@ -49,6 +85,7 @@ function atualizarCamposBasicos(int $id, array $campos): void {
 function criarPessoaBasica(array $campos): int {
     $pdo = getConexao();
     $dados = [
+        'familia_id' => contextoFamiliaId(),
         'nome_completo' => $campos['nome_completo'],
         'sexo' => $campos['sexo'] ?? 'Desconhecido',
         'data_nascimento' => $campos['data_nascimento'] ?? null,
@@ -64,19 +101,21 @@ function criarPessoaBasica(array $campos): int {
 
 function listarPessoas(string $busca = ''): array {
     $pdo = getConexao();
+    $familiaId = contextoFamiliaId();
     if ($busca !== '') {
-        $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE nome_completo LIKE ? ORDER BY nome_completo');
-        $stmt->execute(['%' . $busca . '%']);
+        $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE familia_id = ? AND nome_completo LIKE ? ORDER BY nome_completo');
+        $stmt->execute([$familiaId, '%' . $busca . '%']);
     } else {
-        $stmt = $pdo->query('SELECT * FROM pessoas ORDER BY nome_completo');
+        $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE familia_id = ? ORDER BY nome_completo');
+        $stmt->execute([$familiaId]);
     }
     return $stmt->fetchAll();
 }
 
 function buscarPessoa(int $id): ?array {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE id = ?');
-    $stmt->execute([$id]);
+    $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE id = ? AND familia_id = ?');
+    $stmt->execute([$id, contextoFamiliaId()]);
     $pessoa = $stmt->fetch();
     return $pessoa ?: null;
 }
@@ -102,45 +141,56 @@ function salvarPessoa(array $dados, ?int $id = null): int {
 
     if ($id) {
         $set = implode(', ', array_map(fn($c) => "$c = :$c", array_keys($campos)));
-        $stmt = $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id");
+        $stmt = $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id AND familia_id = :familia_id");
         $campos['id'] = $id;
+        $campos['familia_id'] = contextoFamiliaId();
         $stmt->execute($campos);
+        registrarAuditoria('pessoa', $id, 'atualizacao', ['nome' => $campos['nome_completo']]);
         return $id;
     }
 
+    $campos['familia_id'] = contextoFamiliaId();
     $campos['criado_por'] = usuarioAtualId();
     $colunas = implode(', ', array_keys($campos));
     $marcadores = ':' . implode(', :', array_keys($campos));
     $stmt = $pdo->prepare("INSERT INTO pessoas ($colunas) VALUES ($marcadores)");
     $stmt->execute($campos);
-    return (int) $pdo->lastInsertId();
+    $idNovo = (int) $pdo->lastInsertId();
+    registrarAuditoria('pessoa', $idNovo, 'criacao', ['nome' => $campos['nome_completo']]);
+    return $idNovo;
 }
 
 function excluirPessoa(int $id): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('DELETE FROM pessoas WHERE id = ?');
-    $stmt->execute([$id]);
+    $stmt = $pdo->prepare('DELETE FROM pessoas WHERE id = ? AND familia_id = ?');
+    $stmt->execute([$id, contextoFamiliaId()]);
+    registrarAuditoria('pessoa', $id, 'exclusao');
 }
 
 function atualizarFotoPerfil(int $pessoaId, string $caminho): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('UPDATE pessoas SET foto_perfil = ? WHERE id = ?');
-    $stmt->execute([$caminho, $pessoaId]);
+    $stmt = $pdo->prepare('UPDATE pessoas SET foto_perfil = ? WHERE id = ? AND familia_id = ?');
+    $stmt->execute([$caminho, $pessoaId, contextoFamiliaId()]);
+    registrarAuditoria('pessoa', $pessoaId, 'foto_atualizada');
 }
 
 // --- Relações de parentesco ---
 
 function adicionarPaiMae(int $filhoId, int $paiMaeId, string $tipo = 'biologico'): void {
     if ($filhoId === $paiMaeId) return;
+    exigirPessoaDaFamilia($filhoId);
+    exigirPessoaDaFamilia($paiMaeId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT IGNORE INTO relacoes_parentais (filho_id, pai_mae_id, tipo) VALUES (?, ?, ?)');
     $stmt->execute([$filhoId, $paiMaeId, $tipo]);
+    registrarAuditoria('relacao_parental', (int) $pdo->lastInsertId() ?: null, 'criacao', ['filho_id' => $filhoId, 'pai_mae_id' => $paiMaeId]);
 }
 
 function removerPaiMae(int $filhoId, int $paiMaeId): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('DELETE FROM relacoes_parentais WHERE filho_id = ? AND pai_mae_id = ?');
-    $stmt->execute([$filhoId, $paiMaeId]);
+    $familiaId = contextoFamiliaId();
+    $stmt = $pdo->prepare('DELETE FROM relacoes_parentais WHERE filho_id = ? AND pai_mae_id = ? AND EXISTS (SELECT 1 FROM pessoas p WHERE p.id = relacoes_parentais.filho_id AND p.familia_id = ?) AND EXISTS (SELECT 1 FROM pessoas p2 WHERE p2.id = relacoes_parentais.pai_mae_id AND p2.familia_id = ?)');
+    $stmt->execute([$filhoId, $paiMaeId, $familiaId, $familiaId]);
 }
 
 function listarPais(int $pessoaId): array {
@@ -148,9 +198,10 @@ function listarPais(int $pessoaId): array {
     $stmt = $pdo->prepare(
         'SELECT p.*, rp.tipo FROM pessoas p
          JOIN relacoes_parentais rp ON rp.pai_mae_id = p.id
-         WHERE rp.filho_id = ?'
+         JOIN pessoas filho ON filho.id = rp.filho_id
+         WHERE rp.filho_id = ? AND p.familia_id = ? AND filho.familia_id = ?'
     );
-    $stmt->execute([$pessoaId]);
+    $stmt->execute([$pessoaId, contextoFamiliaId(), contextoFamiliaId()]);
     return $stmt->fetchAll();
 }
 
@@ -159,9 +210,10 @@ function listarFilhos(int $pessoaId): array {
     $stmt = $pdo->prepare(
         'SELECT p.*, rp.tipo FROM pessoas p
          JOIN relacoes_parentais rp ON rp.filho_id = p.id
-         WHERE rp.pai_mae_id = ?'
+         JOIN pessoas pai ON pai.id = rp.pai_mae_id
+         WHERE rp.pai_mae_id = ? AND p.familia_id = ? AND pai.familia_id = ?'
     );
-    $stmt->execute([$pessoaId]);
+    $stmt->execute([$pessoaId, contextoFamiliaId(), contextoFamiliaId()]);
     return $stmt->fetchAll();
 }
 
@@ -169,60 +221,74 @@ function listarFilhos(int $pessoaId): array {
 
 function adicionarUniao(int $pessoa1Id, int $pessoa2Id, string $tipo = 'casamento', ?string $dataInicio = null): void {
     if ($pessoa1Id === $pessoa2Id) return;
+    exigirPessoaDaFamilia($pessoa1Id);
+    exigirPessoaDaFamilia($pessoa2Id);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT INTO unioes (pessoa1_id, pessoa2_id, tipo, data_inicio) VALUES (?, ?, ?, ?)');
     $stmt->execute([$pessoa1Id, $pessoa2Id, $tipo, $dataInicio ?: null]);
+    registrarAuditoria('uniao', (int) $pdo->lastInsertId(), 'criacao', ['pessoa1_id' => $pessoa1Id, 'pessoa2_id' => $pessoa2Id]);
 }
 
 function listarConjuges(int $pessoaId): array {
+    exigirPessoaDaFamilia($pessoaId);
     $pdo = getConexao();
     $stmt = $pdo->prepare(
         'SELECT p.*, u.tipo, u.status, u.data_inicio, u.data_fim, u.id AS uniao_id
          FROM pessoas p
          JOIN unioes u ON (u.pessoa1_id = p.id OR u.pessoa2_id = p.id)
-         WHERE (u.pessoa1_id = ? OR u.pessoa2_id = ?) AND p.id != ?'
+         JOIN pessoas pessoa_foco ON pessoa_foco.id = ?
+         WHERE (u.pessoa1_id = pessoa_foco.id OR u.pessoa2_id = pessoa_foco.id) AND p.id != pessoa_foco.id AND p.familia_id = ? AND pessoa_foco.familia_id = ?'
     );
-    $stmt->execute([$pessoaId, $pessoaId, $pessoaId]);
+    $stmt->execute([$pessoaId, contextoFamiliaId(), contextoFamiliaId()]);
     return $stmt->fetchAll();
 }
 
 function removerUniao(int $uniaoId): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('DELETE FROM unioes WHERE id = ?');
-    $stmt->execute([$uniaoId]);
+    $familiaId = contextoFamiliaId();
+    $stmt = $pdo->prepare('DELETE FROM unioes WHERE id = ? AND pessoa1_id IN (SELECT id FROM pessoas WHERE familia_id = ?) AND pessoa2_id IN (SELECT id FROM pessoas WHERE familia_id = ?)');
+    $stmt->execute([$uniaoId, $familiaId, $familiaId]);
+    registrarAuditoria('uniao', $uniaoId, 'exclusao');
 }
 
 function atualizarUniao(int $uniaoId, string $tipo, ?string $dataInicio, ?string $dataFim, string $status): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('UPDATE unioes SET tipo = ?, data_inicio = ?, data_fim = ?, status = ? WHERE id = ?');
-    $stmt->execute([$tipo, $dataInicio ?: null, $dataFim ?: null, $status, $uniaoId]);
+    $familiaId = contextoFamiliaId();
+    $stmt = $pdo->prepare('UPDATE unioes SET tipo = ?, data_inicio = ?, data_fim = ?, status = ? WHERE id = ? AND pessoa1_id IN (SELECT id FROM pessoas WHERE familia_id = ?) AND pessoa2_id IN (SELECT id FROM pessoas WHERE familia_id = ?)');
+    $stmt->execute([$tipo, $dataInicio ?: null, $dataFim ?: null, $status, $uniaoId, $familiaId, $familiaId]);
+    registrarAuditoria('uniao', $uniaoId, 'atualizacao');
 }
 
 // --- Nomes adicionais (nome de casada, religioso etc.) ---
 
 function adicionarNomeAdicional(int $pessoaId, string $nome, string $tipo = 'casamento', ?int $uniaoId = null, string $observacao = ''): void {
+    exigirPessoaDaFamilia($pessoaId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT INTO nomes_pessoa (pessoa_id, nome, tipo, uniao_id, observacao) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$pessoaId, $nome, $tipo, $uniaoId ?: null, $observacao ?: null]);
+    registrarAuditoria('nome_adicional', (int) $pdo->lastInsertId(), 'criacao', ['pessoa_id' => $pessoaId]);
 }
 
 function listarNomesAdicionais(int $pessoaId): array {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('SELECT * FROM nomes_pessoa WHERE pessoa_id = ? ORDER BY criado_em');
-    $stmt->execute([$pessoaId]);
+    $stmt = $pdo->prepare('SELECT n.* FROM nomes_pessoa n JOIN pessoas p ON p.id = n.pessoa_id WHERE n.pessoa_id = ? AND p.familia_id = ? ORDER BY n.criado_em');
+    $stmt->execute([$pessoaId, contextoFamiliaId()]);
     return $stmt->fetchAll();
 }
 
 function removerNomeAdicional(int $nomeId): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('DELETE FROM nomes_pessoa WHERE id = ?');
-    $stmt->execute([$nomeId]);
+    $stmt = $pdo->prepare('DELETE FROM nomes_pessoa WHERE id = ? AND pessoa_id IN (SELECT id FROM pessoas WHERE familia_id = ?)');
+    $stmt->execute([$nomeId, contextoFamiliaId()]);
+    registrarAuditoria('nome_adicional', $nomeId, 'exclusao');
 }
 
 // --- Mídias (fotos e documentos) ---
 // Uma mesma mídia (ex: certidão de casamento) pode estar vinculada a mais de uma pessoa.
 
 function adicionarMidia(array $pessoaIds, string $tipo, string $caminho, string $titulo = ''): int {
+    $pessoaIds = array_values(array_unique(array_map('intval', $pessoaIds)));
+    foreach ($pessoaIds as $pid) exigirPessoaDaFamilia($pid);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT INTO midias (tipo, caminho_arquivo, titulo, enviado_por) VALUES (?, ?, ?, ?)');
     $stmt->execute([$tipo, $caminho, $titulo ?: null, usuarioAtualId()]);
@@ -230,10 +296,12 @@ function adicionarMidia(array $pessoaIds, string $tipo, string $caminho, string 
     foreach (array_unique(array_map('intval', $pessoaIds)) as $pid) {
         vincularMidiaAPessoa($midiaId, $pid);
     }
+    registrarAuditoria('midia', $midiaId, 'criacao', ['pessoas' => $pessoaIds]);
     return $midiaId;
 }
 
 function vincularMidiaAPessoa(int $midiaId, int $pessoaId): void {
+    exigirPessoaDaFamilia($pessoaId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT IGNORE INTO midia_pessoa (midia_id, pessoa_id) VALUES (?, ?)');
     $stmt->execute([$midiaId, $pessoaId]);
@@ -243,8 +311,10 @@ function vincularMidiaAPessoa(int $midiaId, int $pessoaId): void {
 // o arquivo é apagado de vez (evita arquivos órfãos ocupando espaço).
 function desvincularMidiaDePessoa(int $midiaId, int $pessoaId): void {
     $pdo = getConexao();
+    exigirPessoaDaFamilia($pessoaId);
     $stmt = $pdo->prepare('DELETE FROM midia_pessoa WHERE midia_id = ? AND pessoa_id = ?');
     $stmt->execute([$midiaId, $pessoaId]);
+    if ($stmt->rowCount() === 0) return;
 
     $stmt = $pdo->prepare('SELECT COUNT(*) AS total FROM midia_pessoa WHERE midia_id = ?');
     $stmt->execute([$midiaId]);
@@ -270,10 +340,10 @@ function listarMidias(int $pessoaId): array {
     $stmt = $pdo->prepare(
         'SELECT m.* FROM midias m
          JOIN midia_pessoa mp ON mp.midia_id = m.id
-         WHERE mp.pessoa_id = ?
+         WHERE mp.pessoa_id = ? AND EXISTS (SELECT 1 FROM pessoas p2 WHERE p2.id = mp.pessoa_id AND p2.familia_id = ?)
          ORDER BY m.criado_em DESC'
     );
-    $stmt->execute([$pessoaId]);
+    $stmt->execute([$pessoaId, contextoFamiliaId()]);
     return $stmt->fetchAll();
 }
 
@@ -282,8 +352,8 @@ function listarPessoasDaMidia(int $midiaId, ?int $excetoPessoaId = null): array 
     $pdo = getConexao();
     $sql = 'SELECT p.id, p.nome_completo FROM pessoas p
             JOIN midia_pessoa mp ON mp.pessoa_id = p.id
-            WHERE mp.midia_id = ?';
-    $params = [$midiaId];
+            WHERE mp.midia_id = ? AND p.familia_id = ?';
+    $params = [$midiaId, contextoFamiliaId()];
     if ($excetoPessoaId) {
         $sql .= ' AND p.id != ?';
         $params[] = $excetoPessoaId;
@@ -303,10 +373,11 @@ function listarMidiasNaoVinculadas(int $pessoaId): array {
          JOIN midia_pessoa mp ON mp.midia_id = m.id
          JOIN pessoas p ON p.id = mp.pessoa_id
          WHERE m.id NOT IN (SELECT midia_id FROM midia_pessoa WHERE pessoa_id = ?)
+           AND p.familia_id = ?
          GROUP BY m.id
          ORDER BY m.criado_em DESC"
     );
-    $stmt->execute([$pessoaId]);
+    $stmt->execute([$pessoaId, contextoFamiliaId()]);
     return $stmt->fetchAll();
 }
 
