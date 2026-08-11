@@ -1,134 +1,126 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
+
 exigirFamilia();
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: private, no-store');
+header('Cache-Control: private, no-store, max-age=0');
 
 $pdo = getConexao();
 $familiaId = familiaAtualId();
 
-$stmt = $pdo->prepare(
+$pessoasStmt = $pdo->prepare(
     'SELECT id, nome_completo, apelido, sexo, foto_perfil, data_nascimento,
-            data_falecimento, falecido, local_nascimento, local_falecimento,
-            atualizado_em
+            data_falecimento, falecido, local_nascimento, atualizado_em
      FROM pessoas
      WHERE familia_id = ?
-     ORDER BY nome_completo'
+     ORDER BY nome_completo COLLATE utf8mb4_general_ci, id'
 );
-$stmt->execute([$familiaId]);
-$pessoas = $stmt->fetchAll();
+$pessoasStmt->execute([$familiaId]);
+$pessoas = $pessoasStmt->fetchAll();
 
-$stmt = $pdo->prepare(
+$ids = array_map(static fn(array $p): string => (string) $p['id'], $pessoas);
+$validIds = array_fill_keys($ids, true);
+
+$parentStmt = $pdo->prepare(
     'SELECT rp.filho_id, rp.pai_mae_id, rp.tipo
      FROM relacoes_parentais rp
-     JOIN pessoas filho ON filho.id = rp.filho_id
-     JOIN pessoas pai ON pai.id = rp.pai_mae_id
-     WHERE filho.familia_id = ? AND pai.familia_id = ?'
+     INNER JOIN pessoas filho ON filho.id = rp.filho_id AND filho.familia_id = ?
+     INNER JOIN pessoas pai ON pai.id = rp.pai_mae_id AND pai.familia_id = ?
+     ORDER BY rp.filho_id, rp.pai_mae_id'
 );
-$stmt->execute([$familiaId, $familiaId]);
-$relacoes = $stmt->fetchAll();
+$parentStmt->execute([$familiaId, $familiaId]);
+$parentRows = $parentStmt->fetchAll();
 
-$stmt = $pdo->prepare(
-    'SELECT u.id, u.pessoa1_id, u.pessoa2_id, u.tipo, u.status, u.data_inicio, u.data_fim
+$unionStmt = $pdo->prepare(
+    'SELECT u.id, u.pessoa1_id, u.pessoa2_id, u.tipo, u.status,
+            u.data_inicio, u.data_fim
      FROM unioes u
-     JOIN pessoas p1 ON p1.id = u.pessoa1_id
-     JOIN pessoas p2 ON p2.id = u.pessoa2_id
-     WHERE p1.familia_id = ? AND p2.familia_id = ?'
+     INNER JOIN pessoas p1 ON p1.id = u.pessoa1_id AND p1.familia_id = ?
+     INNER JOIN pessoas p2 ON p2.id = u.pessoa2_id AND p2.familia_id = ?
+     ORDER BY u.pessoa1_id, u.pessoa2_id, u.id'
 );
-$stmt->execute([$familiaId, $familiaId]);
-$unioes = $stmt->fetchAll();
+$unionStmt->execute([$familiaId, $familiaId]);
+$unionRows = $unionStmt->fetchAll();
 
-function ano(?string $data): ?string {
-    return $data ? date('Y', strtotime($data)) : null;
+$parents = [];
+$children = [];
+foreach ($parentRows as $row) {
+    $child = (string) $row['filho_id'];
+    $parent = (string) $row['pai_mae_id'];
+    if (!isset($validIds[$child], $validIds[$parent])) continue;
+    $parents[$child][] = $parent;
+    $children[$parent][] = $child;
 }
 
-function textoDatas(array $p): string {
-    $n = ano($p['data_nascimento'] ?? null);
-    $f = ano($p['data_falecimento'] ?? null);
-    if (!empty($p['falecido'])) {
-        return ($n ?: '?') . ' — ' . ($f ?: '?');
-    }
-    return $n ? 'n. ' . $n : 'datas não informadas';
+$spouses = [];
+$unionsByPerson = [];
+foreach ($unionRows as $row) {
+    $personOne = (string) $row['pessoa1_id'];
+    $personTwo = (string) $row['pessoa2_id'];
+    if (!isset($validIds[$personOne], $validIds[$personTwo])) continue;
+    $spouses[$personOne][] = $personTwo;
+    $spouses[$personTwo][] = $personOne;
+    $union = [
+        'id' => (int) $row['id'],
+        'tipo' => (string) ($row['tipo'] ?? ''),
+        'status' => (string) ($row['status'] ?? ''),
+        'inicio' => $row['data_inicio'],
+        'fim' => $row['data_fim'],
+    ];
+    $unionsByPerson[$personOne][] = $union;
+    $unionsByPerson[$personTwo][] = $union;
 }
 
-$paisDe = [];
-$filhosDe = [];
-foreach ($relacoes as $r) {
-    $filho = (string) $r['filho_id'];
-    $pai = (string) $r['pai_mae_id'];
-    $paisDe[$filho][] = $pai;
-    $filhosDe[$pai][] = $filho;
-}
+$uniqueIds = static fn(array $values): array => array_values(array_unique(array_map('strval', $values)));
+$year = static fn(?string $date): ?string => $date ? substr($date, 0, 4) : null;
+$dates = static function (array $person) use ($year): string {
+    $birth = $year($person['data_nascimento'] ?? null);
+    $death = $year($person['data_falecimento'] ?? null);
+    if (!empty($person['falecido'])) return ($birth ?: '?') . ' — ' . ($death ?: '?');
+    return $birth ? 'n. ' . $birth : 'Datas não informadas';
+};
 
-$conjugesDe = [];
-$unioesPorPessoa = [];
-foreach ($unioes as $u) {
-    $a = (string) $u['pessoa1_id'];
-    $b = (string) $u['pessoa2_id'];
-    $conjugesDe[$a][] = $b;
-    $conjugesDe[$b][] = $a;
-    $unioesPorPessoa[$a][] = $u;
-    $unioesPorPessoa[$b][] = $u;
-}
-
-$saida = [];
-foreach ($pessoas as $p) {
-    $id = (string) $p['id'];
-    $sexo = in_array($p['sexo'], ['M', 'F'], true) ? $p['sexo'] : null;
-    $nome = trim($p['nome_completo']);
-    $partes = preg_split('/\s+/', $nome);
-    $primeiroNome = $partes[0] ?? $nome;
-    $sobrenome = count($partes) > 1 ? implode(' ', array_slice($partes, -2)) : '';
-    $saida[] = [
+$output = [];
+foreach ($pessoas as $person) {
+    $id = (string) $person['id'];
+    $name = trim((string) $person['nome_completo']);
+    $parts = preg_split('/\s+/', $name, -1, PREG_SPLIT_NO_EMPTY);
+    $shortName = (string) ($person['apelido'] ?: ($parts[0] ?? $name));
+    $gender = in_array($person['sexo'], ['M', 'F'], true) ? $person['sexo'] : 'neutral';
+    $output[] = [
         'id' => $id,
-        'data' => [
-            'nome' => $nome,
-            'nomeCurto' => $p['apelido'] ?: $primeiroNome,
-            'sobrenome' => $sobrenome,
-            'apelido' => $p['apelido'] ?: '',
-            'sexo' => $p['sexo'],
-            'gender' => $sexo,
-            'nascimento' => $p['data_nascimento'] ?: '',
-            'falecimento' => $p['data_falecimento'] ?: '',
-            'datas' => textoDatas($p),
-            'status' => !empty($p['falecido']) ? 'falecido' : 'vivo',
-            'localNascimento' => $p['local_nascimento'] ?: '',
-            'localFalecimento' => $p['local_falecimento'] ?: '',
-            'avatar' => caminhoFotoValido($p['foto_perfil']),
-            'atualizadoEm' => $p['atualizado_em'],
-            'unioes' => array_map(static fn($u) => [
-                'id' => (int) $u['id'],
-                'tipo' => $u['tipo'],
-                'status' => $u['status'],
-                'inicio' => $u['data_inicio'],
-                'fim' => $u['data_fim'],
-            ], $unioesPorPessoa[$id] ?? []),
-        ],
-        'rels' => [
-            'parents' => array_values(array_unique($paisDe[$id] ?? [])),
-            'spouses' => array_values(array_unique($conjugesDe[$id] ?? [])),
-            'children' => array_values(array_unique($filhosDe[$id] ?? [])),
-        ],
+        'nome' => $name,
+        'nomeCurto' => $shortName,
+        'sexo' => $person['sexo'],
+        'gender' => $gender,
+        'datas' => $dates($person),
+        'localNascimento' => (string) ($person['local_nascimento'] ?? ''),
+        'foto' => caminhoFotoValido($person['foto_perfil']),
+        'status' => !empty($person['falecido']) ? 'falecido' : 'vivo',
+        'pais' => $uniqueIds($parents[$id] ?? []),
+        'filhos' => $uniqueIds($children[$id] ?? []),
+        'conjuges' => $uniqueIds($spouses[$id] ?? []),
+        'unioes' => $unionsByPerson[$id] ?? [],
     ];
 }
 
-$totais = [
-    'pessoas' => count($pessoas),
-    'vivas' => count(array_filter($pessoas, static fn($p) => empty($p['falecido']))),
-    'falecidas' => count(array_filter($pessoas, static fn($p) => !empty($p['falecido']))),
-    'relacoes' => count($relacoes),
-    'unioes' => count($unioes),
-];
+$familyStmt = $pdo->prepare('SELECT id, nome, slug, descricao FROM familias WHERE id = ?');
+$familyStmt->execute([$familiaId]);
 
-$familia = $pdo->prepare('SELECT id, nome, slug, descricao FROM familias WHERE id = ?');
-$familia->execute([$familiaId]);
+$totalPeople = count($pessoas);
+$alive = count(array_filter($pessoas, static fn(array $person): bool => empty($person['falecido'])));
 
-// O endpoint mantém uma estrutura explícita de nós e relações para consumo
-// pela camada SVG própria, sem dependências externas no navegador.
+http_response_code(200);
 echo json_encode([
-    'familia' => $familia->fetch() ?: ['id' => $familiaId, 'nome' => familiaAtualNome()],
-    'totais' => $totais,
-    'pessoas' => $saida,
+    'familia' => $familyStmt->fetch() ?: ['id' => $familiaId, 'nome' => familiaAtualNome()],
+    'totais' => [
+        'pessoas' => $totalPeople,
+        'vivas' => $alive,
+        'falecidas' => $totalPeople - $alive,
+        'relacoes' => count($parentRows),
+        'unioes' => count($unionRows),
+    ],
+    'pessoas' => $output,
     'geradoEm' => date(DATE_ATOM),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

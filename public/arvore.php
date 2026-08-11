@@ -3,26 +3,22 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 exigirFamilia();
 
-$pdo = getConexao();
-$familiaId = familiaAtualId();
-$stmt = $pdo->prepare('SELECT COUNT(*) AS total, SUM(falecido = 0) AS vivas, SUM(falecido = 1) AS falecidas FROM pessoas WHERE familia_id = ?');
-$stmt->execute([$familiaId]);
-$totais = $stmt->fetch() ?: ['total' => 0, 'vivas' => 0, 'falecidas' => 0];
+$familiaNome = familiaAtualNome() ?: 'Família ativa';
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Explorar árvore · <?= htmlspecialchars(familiaAtualNome() ?: 'Árvore Familiar') ?></title>
+    <title>Árvore · <?= htmlspecialchars($familiaNome) ?></title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="tree-page-body">
 <header class="topo">
     <a class="brand" href="index.php">Árvore Familiar</a>
-    <nav>
+    <nav aria-label="Navegação principal">
         <a href="index.php">Painel</a>
-        <a href="arvore.php" aria-current="page">Explorar árvore</a>
+        <a href="arvore.php" aria-current="page">Árvore</a>
         <a href="familias.php">Famílias</a>
         <span class="user-chip"><?= htmlspecialchars(usuarioAtualNome() ?: '') ?></span>
         <a href="logout.php">Sair</a>
@@ -30,76 +26,95 @@ $totais = $stmt->fetch() ?: ['total' => 0, 'vivas' => 0, 'falecidas' => 0];
 </header>
 
 <main class="tree-page">
-    <div class="tree-intro">
+    <header class="tree-heading">
         <div>
-            <span class="eyebrow">Explorador genealógico</span>
-            <h1>A história da família, em contexto.</h1>
-            <p>Navegue por ascendentes e descendentes sem perder o foco. Clique em qualquer pessoa para torná-la o centro da história; arraste para percorrer e use o zoom para abrir novas ramificações.</p>
+            <span class="eyebrow">Navegador genealógico</span>
+            <h1>Explore uma geração por vez.</h1>
+            <p>Escolha uma pessoa para colocá-la no centro. Pais ficam acima, filhos abaixo e cônjuges ao lado. Arraste o fundo, use o zoom ou pressione as setas do teclado.</p>
         </div>
-        <div class="family-badge"><span>◈</span> <?= htmlspecialchars(familiaAtualNome() ?: 'Família ativa') ?></div>
-    </div>
+        <div class="tree-heading-meta">
+            <span class="family-badge">◈ <?= htmlspecialchars($familiaNome) ?></span>
+            <span class="tree-total" data-tree-total>Carregando…</span>
+        </div>
+    </header>
 
-    <section class="tree-shell" aria-label="Explorador da árvore genealógica">
+    <section class="tree-shell" aria-label="Árvore genealógica">
         <div class="tree-toolbar">
             <div class="tree-search">
-                <span class="search-icon">⌕</span>
-                <input id="tree-search" type="search" autocomplete="off" placeholder="Buscar uma pessoa pelo nome…" aria-label="Buscar pessoa">
-                <div class="search-results" data-search-results hidden></div>
+                <span class="search-icon" aria-hidden="true">⌕</span>
+                <input id="tree-search" type="search" autocomplete="off" placeholder="Buscar pessoa e pressionar Enter…" aria-label="Buscar pessoa">
+                <div id="tree-search-results" class="tree-search-results" hidden></div>
             </div>
-            <div class="toolbar-group" aria-label="Controles de visualização">
-                <button class="icon-btn" type="button" data-tree-action="zoom-out" title="Diminuir zoom" aria-label="Diminuir zoom">−</button>
-                <button class="icon-btn" type="button" data-tree-action="zoom-in" title="Aumentar zoom" aria-label="Aumentar zoom">+</button>
-                <button class="icon-btn" type="button" data-tree-action="fit" title="Enquadrar árvore" aria-label="Enquadrar árvore">□</button>
-                <button class="icon-btn" type="button" data-tree-action="center" title="Centralizar pessoa em foco" aria-label="Centralizar pessoa em foco">◎</button>
+            <div class="tree-toolbar-group" aria-label="Controles da árvore">
+                <button class="tree-tool" type="button" data-tree-action="zoom-out" title="Diminuir zoom" aria-label="Diminuir zoom">−</button>
+                <span class="tree-zoom" id="tree-zoom">100%</span>
+                <button class="tree-tool" type="button" data-tree-action="zoom-in" title="Aumentar zoom" aria-label="Aumentar zoom">+</button>
+                <button class="tree-tool" type="button" data-tree-action="fit" title="Enquadrar árvore" aria-label="Enquadrar árvore">⛶</button>
+                <button class="tree-tool" type="button" data-tree-action="center" title="Centralizar pessoa em foco" aria-label="Centralizar pessoa em foco">◎</button>
+                <button class="tree-tool" type="button" data-tree-action="toggle-panel" title="Mostrar ou ocultar detalhes" aria-label="Mostrar ou ocultar detalhes" aria-pressed="true">Detalhes</button>
             </div>
-            <label>Ascendentes <input id="tree-ancestors" type="range" min="1" max="5" value="3" aria-label="Profundidade de ascendentes"></label>
-            <label>Descendentes <input id="tree-descendants" type="range" min="1" max="5" value="3" aria-label="Profundidade de descendentes"></label>
-            <span class="tree-status" id="tree-status">Carregando…</span>
+            <label class="tree-range" for="tree-ancestors">Acima <input id="tree-ancestors" type="range" min="1" max="5" value="2" aria-label="Gerações acima"></label>
+            <label class="tree-range" for="tree-descendants">Abaixo <input id="tree-descendants" type="range" min="1" max="5" value="2" aria-label="Gerações abaixo"></label>
+            <span class="tree-status" id="tree-status" role="status" aria-live="polite">Carregando a árvore…</span>
         </div>
-        <div class="tree-workspace">
-            <div class="tree-viewport" id="tree-viewport">
+
+        <div class="tree-main">
+            <div class="tree-viewport" id="tree-viewport" tabindex="0" aria-label="Área interativa da árvore. Arraste para mover e use a roda do mouse para aproximar.">
                 <div class="tree-stage" id="tree-stage"></div>
-            </div>
-            <aside class="tree-side" id="tree-person-panel" aria-live="polite">
-                <div class="person-summary">
-                    <span class="side-label">Pessoa em foco</span>
-                    <h2 data-person-name>Selecione alguém</h2>
-                    <p class="summary-dates" data-person-dates>—</p>
-                    <p class="summary-location" data-person-location>—</p>
-                    <p class="summary-relations" data-person-relations>—</p>
+                <div class="tree-empty" id="tree-empty" hidden>
+                    <div class="tree-empty-inner">
+                        <div class="tree-empty-icon">✦</div>
+                        <h2 data-empty-title>A árvore ainda está vazia</h2>
+                        <p data-empty-message>Adicione a primeira pessoa para começar.</p>
+                        <?php if (usuarioPodeEditar()): ?><a class="btn" href="pessoa_editar.php">Adicionar pessoa</a><?php endif; ?>
+                    </div>
                 </div>
-                <div>
-                    <a class="btn" data-person-profile href="index.php">Abrir perfil</a>
-                    <a class="btn btn-secundario" href="pessoa_editar.php">Adicionar pessoa</a>
+            </div>
+
+            <aside class="tree-panel" id="tree-person-panel" aria-live="polite">
+                <span class="tree-panel-label">Pessoa selecionada</span>
+                <img class="tree-panel-photo" data-person-photo alt="">
+                <h2 data-person-name>Selecione uma pessoa</h2>
+                <p class="tree-panel-dates" data-person-dates>—</p>
+                <p class="tree-panel-location" data-person-location>—</p>
+                <p class="tree-panel-relations" data-person-relations>—</p>
+                <div class="tree-panel-actions">
+                    <a class="btn btn-small" data-person-profile href="index.php">Abrir perfil</a>
+                    <?php if (usuarioPodeEditar()): ?><a class="btn btn-small btn-secundario" href="pessoa_editar.php">Adicionar pessoa</a><?php endif; ?>
                 </div>
                 <div class="tree-guide">
-                    <strong>Dica de navegação</strong>
-                    <p>O enquadramento começa compacto para facilitar a leitura. Aumente a profundidade de gerações quando quiser ampliar o contexto, ou arraste o fundo para percorrer a árvore.</p>
+                    <strong>Navegação rápida</strong>
+                    <p>Clique em um cartão para mudar o foco. Com o cartão selecionado, use ↑ para pais, ↓ para filhos e ←/→ para cônjuges.</p>
                 </div>
             </aside>
         </div>
     </section>
-    <div class="tree-legend">
-        <span><i class="legend-dot" style="background:#b9d1dc"></i> Masculino</span>
-        <span><i class="legend-dot" style="background:#dfbdc4"></i> Feminino</span>
-        <span>Linhas contínuas indicam parentesco</span>
-        <span>Linhas tracejadas indicam união</span>
+
+    <div class="tree-legend" aria-label="Legenda">
+        <span><i class="legend-dot" style="background:#6a9ab0"></i> Masculino</span>
+        <span><i class="legend-dot" style="background:#c17d8d"></i> Feminino</span>
+        <span>linha verde: parentesco</span>
+        <span>linha dourada tracejada: união</span>
     </div>
 </main>
-<script src="js/tree-explorer.js"></script>
+
+<script src="js/tree-view.js"></script>
 <script>
-    const explorer = new TreeExplorer({
-        root: '#tree-stage',
-        stage: '#tree-stage',
-        viewport: '#tree-viewport',
-        panel: '#tree-person-panel',
-        search: '#tree-search',
-        ancestorRange: '#tree-ancestors',
-        descendantRange: '#tree-descendants',
-        status: '#tree-status',
-        badge: document.querySelector('.family-badge'),
+  window.addEventListener('DOMContentLoaded', () => {
+    const tree = new FamilyTreeView({
+      viewport: '#tree-viewport',
+      stage: '#tree-stage',
+      panel: '#tree-person-panel',
+      search: '#tree-search',
+      results: '#tree-search-results',
+      ancestorRange: '#tree-ancestors',
+      descendantRange: '#tree-descendants',
+      status: '#tree-status',
+      zoomLabel: '#tree-zoom',
+      empty: '#tree-empty',
     });
-    explorer.load();
+    tree.load();
+  });
 </script>
 </body>
 </html>
