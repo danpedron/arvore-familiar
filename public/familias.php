@@ -31,17 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fonteStmt->execute([$pessoaId, familiaAtualId()]);
             $fonte = $fonteStmt->fetch();
             if (!$fonte) throw new RuntimeException('Pessoa não encontrada em um espaço que você pode consultar.');
-            associarPessoaAoEspaco($pessoaId, familiaAtualId(), 'referenciada', usuarioAtualId());
-            registrarAuditoria('familia_pessoas', $pessoaId, 'referencia_criada', ['familia_origem' => (int) $fonte['familia_id'], 'familia_destino' => familiaAtualId()]);
-            $mensagem = $fonte['nome_completo'] . ' agora está disponível neste espaço. A edição continua vinculada às permissões da família de origem.';
+            $idsLinhagem = associarPessoaComLinhagem($pessoaId, familiaAtualId(), usuarioAtualId());
+            registrarAuditoria('familia_pessoas', $pessoaId, 'referencia_criada', [
+                'familia_origem' => (int) $fonte['familia_id'],
+                'familia_destino' => familiaAtualId(),
+                'pessoas_incluidas' => count($idsLinhagem),
+                'linhagem' => $idsLinhagem,
+            ]);
+            $mensagem = $fonte['nome_completo'] . ' e ' . (count($idsLinhagem) - 1) . ' pessoa(s) da linhagem conhecida agora estão disponíveis neste espaço. Relações de padrasto/madrasta e cônjuges sem vínculo parental não são importadas.';
         }
         if ($acao === 'desreferenciar_pessoa') {
             if (!usuarioPodeEditar()) throw new RuntimeException('Você precisa ser editor ou responsável pelo espaço para remover uma referência.');
             $pessoaId = (int) ($_POST['pessoa_id'] ?? 0);
-            $stmt = $pdo->prepare("DELETE FROM familia_pessoas WHERE familia_id = ? AND pessoa_id = ? AND tipo = 'referenciada'");
-            $stmt->execute([familiaAtualId(), $pessoaId]);
-            registrarAuditoria('familia_pessoas', $pessoaId, 'referencia_removida');
-            $mensagem = 'A referência foi removida deste espaço. O registro original permanece intacto.';
+            $rootStmt = $pdo->prepare(
+                'SELECT 1 FROM familia_pessoa_escopos WHERE familia_id = ? AND referencia_raiz_id = ? AND pessoa_id = ? LIMIT 1'
+            );
+            $rootStmt->execute([familiaAtualId(), $pessoaId, $pessoaId]);
+            if (!$rootStmt->fetchColumn()) throw new RuntimeException('Somente uma referência incluída diretamente pode ser removida; os ancestrais são mantidos pelo escopo da linhagem.');
+            $removidas = removerPessoaComLinhagem($pessoaId, familiaAtualId());
+            registrarAuditoria('familia_pessoas', $pessoaId, 'referencia_removida', ['pessoas_desassociadas' => $removidas]);
+            $mensagem = 'A referência e as pessoas da linhagem que não eram mais necessárias foram removidas deste espaço. Os registros originais permanecem intactos.';
         }
         if ($acao === 'selecionar') {
             $id = (int) ($_POST['familia_id'] ?? 0);
@@ -101,6 +110,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         $erro = $e->getMessage();
     }
+
+    if (!$erro && ($acao ?? '') === 'referenciar_pessoa' && ($_POST['retorno'] ?? '') === 'arvore') {
+        header('Location: arvore.php?referencia=adicionada&foco=' . (int) ($pessoaId ?? 0));
+        exit;
+    }
 }
 
 $familias = listarFamiliasDaComunidade();
@@ -129,6 +143,12 @@ if ($familiaSelecionada) {
          JOIN pessoas p ON p.id = fp.pessoa_id
          JOIN familias origem ON origem.id = p.familia_id
          WHERE fp.familia_id = ? AND fp.tipo = 'referenciada'
+           AND EXISTS (
+               SELECT 1 FROM familia_pessoa_escopos raiz
+               WHERE raiz.familia_id = fp.familia_id
+                 AND raiz.referencia_raiz_id = fp.pessoa_id
+                 AND raiz.pessoa_id = fp.pessoa_id
+           )
          ORDER BY origem.nome, p.nome_completo"
     );
     $stmt->execute([$familiaSelecionada]);
@@ -174,7 +194,7 @@ if ($familiaSelecionada) {
         <form class="dashboard-layout" style="grid-template-columns:minmax(220px,1fr) minmax(220px,1.4fr) 150px;gap:10px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="atualizar"><label>Nome do espaço<input name="nome" required minlength="3" maxlength="180" value="<?= htmlspecialchars($familiaAtiva['nome'] ?? '') ?>"></label><label>Descrição <span class="muted">(opcional)</span><input name="descricao" maxlength="500" value="<?= htmlspecialchars($familiaAtiva['descricao'] ?? '') ?>" placeholder="Ex.: Descendentes de Antônio Pedron"></label><div style="display:flex;align-items:flex-end"><button class="btn" type="submit">Salvar nome</button></div></form>
     </section>
     <?php endif; ?>
-    <section class="surface panel" id="referenciar-pessoa" style="margin-top:22px"><div class="panel-header"><div><h2>＋ Incluir pessoa existente</h2><span class="muted small">Pesquise alguém já cadastrado em qualquer outro espaço da comunidade. A pessoa passa a aparecer nesta árvore sem duplicar o cadastro; a edição segue a permissão da família de origem.</span></div></div>
+    <section class="surface panel" id="referenciar-pessoa" style="margin-top:22px"><div class="panel-header"><div><h2>＋ Incluir pessoa existente</h2><span class="muted small">Pesquise alguém já cadastrado em qualquer outro espaço da comunidade. A pessoa e os pais biológicos/adotivos conhecidos passam a aparecer nesta árvore sem duplicar cadastros; padrastos, madrastas e cônjuges sem vínculo parental ficam fora.</span></div></div>
         <?php if ($pessoasDisponiveisReferencia): ?>
         <form class="dashboard-layout" style="grid-template-columns:minmax(0,1fr) 150px;gap:10px;margin-bottom:18px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="referenciar_pessoa"><label>Pessoa para referenciar<select name="pessoa_id" required><option value="">Selecione...</option><?php $familiaReferenciaAtual = ''; foreach ($pessoasDisponiveisReferencia as $opcao): if ($familiaReferenciaAtual !== $opcao['familia_nome']): $familiaReferenciaAtual = $opcao['familia_nome']; ?><option disabled>— <?= htmlspecialchars($familiaReferenciaAtual) ?> —</option><?php endif; ?><option value="<?= (int) $opcao['id'] ?>"><?= htmlspecialchars($opcao['nome_completo']) ?></option><?php endforeach; ?></select></label><div style="display:flex;align-items:flex-end"><button class="btn" type="submit">Referenciar pessoa</button></div></form>
         <?php else: ?><p class="muted">Não há pessoas disponíveis em outros espaços ou todas já estão incluídas nesta árvore.</p><?php endif; ?>

@@ -159,9 +159,10 @@ $seguidas = $seguidasStmt->fetchAll();
     <form method="post" action="familias.php" data-reference-form>
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
         <input type="hidden" name="acao" value="referenciar_pessoa">
+        <input type="hidden" name="retorno" value="arvore">
         <input type="hidden" name="pessoa_id" value="" data-reference-person-id>
         <div class="dialog-head"><div><span class="sidebar-kicker">Comunidade aberta</span><h2>Incluir pessoa existente</h2></div><button type="button" class="dialog-close" data-dialog-close>×</button></div>
-        <p class="muted">Encontre uma pessoa de outro espaço e inclua o mesmo registro nesta árvore. Se você puder editar a família de origem, a edição continuará disponível aqui.</p>
+        <p class="muted">Encontre uma pessoa de outro espaço. Ela e os pais biológicos/adotivos conhecidos serão integrados a esta árvore, sem duplicar cadastros. Padrastos, madrastas e cônjuges sem vínculo parental não entram automaticamente.</p>
         <label>Pesquisar por nome<input name="q" type="search" autocomplete="off" data-reference-search placeholder="Ex.: Pietra ou Samara"></label>
         <div class="community-person-results" data-reference-results><p class="muted">Digite pelo menos dois caracteres para pesquisar.</p></div>
         <p class="reference-selection" data-reference-selection hidden></p>

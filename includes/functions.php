@@ -82,6 +82,103 @@ function associarPessoaAoEspaco(int $pessoaId, int $familiaId, string $tipo = 'p
     $stmt->execute([$familiaId, $pessoaId, $tipo, $usuarioId ?: usuarioAtualId()]);
 }
 
+/**
+ * Retorna a raiz e o componente genealógico conectado por relações
+ * biológicas/adotivas: pais, descendentes e parentes ligados por esses
+ * vínculos. Relações de padrasto/madrasta ficam fora do escopo para que um
+ * cônjuge atual sem vínculo parental não seja importado por acidente.
+ */
+function listarIdsDaLinhagem(int $raizId): array {
+    $pdo = getConexao();
+    $stmt = $pdo->prepare(
+        "SELECT rp.filho_id, rp.pai_mae_id
+         FROM relacoes_parentais rp
+         WHERE (rp.filho_id = ? OR rp.pai_mae_id = ?)
+           AND rp.tipo IN ('biologico', 'adotivo')
+         ORDER BY rp.filho_id, rp.pai_mae_id"
+    );
+
+    $fila = [$raizId];
+    $vistos = [];
+    $resultado = [];
+    while ($fila) {
+        $atual = (int) array_shift($fila);
+        if ($atual <= 0 || isset($vistos[$atual])) continue;
+        $vistos[$atual] = true;
+        $resultado[] = $atual;
+        $stmt->execute([$atual, $atual]);
+        foreach ($stmt->fetchAll() as $relacao) {
+            $filhoId = (int) $relacao['filho_id'];
+            $paiId = (int) $relacao['pai_mae_id'];
+            $outroId = $filhoId === $atual ? $paiId : $filhoId;
+            if ($outroId > 0 && !isset($vistos[$outroId])) $fila[] = $outroId;
+        }
+    }
+    return $resultado;
+}
+
+/**
+ * Inclui uma pessoa referenciada e seu componente genealógico conhecido no espaço.
+ * As associações continuam como referenciadas e o escopo permite remover
+ * somente o que não for mais necessário por outra raiz ou por uma pessoa nativa.
+ */
+function associarPessoaComLinhagem(int $raizId, int $familiaId, ?int $usuarioId = null): array {
+    $pdo = getConexao();
+    $ids = listarIdsDaLinhagem($raizId);
+    if (!$ids) return [];
+
+    $usuarioId = $usuarioId ?: usuarioAtualId();
+    $iniciouTransacao = !$pdo->inTransaction();
+    if ($iniciouTransacao) $pdo->beginTransaction();
+    try {
+        $incluir = $pdo->prepare(
+            'INSERT IGNORE INTO familia_pessoas (familia_id, pessoa_id, tipo, referenciada_por) VALUES (?, ?, \'referenciada\', ?)'
+        );
+        $escopo = $pdo->prepare(
+            'INSERT IGNORE INTO familia_pessoa_escopos (familia_id, referencia_raiz_id, pessoa_id) VALUES (?, ?, ?)'
+        );
+        foreach ($ids as $pessoaId) {
+            $incluir->execute([$familiaId, $pessoaId, $usuarioId]);
+            $escopo->execute([$familiaId, $raizId, $pessoaId]);
+        }
+        if ($iniciouTransacao) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($iniciouTransacao && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+    return $ids;
+}
+
+/**
+ * Remove uma raiz referenciada e apenas as pessoas derivadas que não são
+ * compartilhadas por outra raiz nem pertencem originalmente ao espaço.
+ */
+function removerPessoaComLinhagem(int $raizId, int $familiaId): int {
+    $pdo = getConexao();
+    $iniciouTransacao = !$pdo->inTransaction();
+    if ($iniciouTransacao) $pdo->beginTransaction();
+    try {
+        $pdo->prepare(
+            'DELETE FROM familia_pessoa_escopos WHERE familia_id = ? AND referencia_raiz_id = ?'
+        )->execute([$familiaId, $raizId]);
+        $stmt = $pdo->prepare(
+            "DELETE FROM familia_pessoas fp
+             WHERE fp.familia_id = ? AND fp.tipo = 'referenciada'
+               AND NOT EXISTS (
+                   SELECT 1 FROM familia_pessoa_escopos e
+                   WHERE e.familia_id = fp.familia_id AND e.pessoa_id = fp.pessoa_id
+               )"
+        );
+        $stmt->execute([$familiaId]);
+        $removidas = $stmt->rowCount();
+        if ($iniciouTransacao) $pdo->commit();
+        return $removidas;
+    } catch (Throwable $e) {
+        if ($iniciouTransacao && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
 // Placeholder local (SVG embutido, sem nenhuma requisição de rede) usado quando
 // a pessoa não tem foto ou quando o caminho salvo no banco aponta pra um arquivo
 // que não existe mais em disco (evita 404 no nginx e bloqueios por fail2ban).
