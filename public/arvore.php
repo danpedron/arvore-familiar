@@ -19,7 +19,7 @@ $seguidas = $seguidasStmt->fetchAll();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Árvore · <?= htmlspecialchars($familiaNome) ?></title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="css/style.css?v=hierarchy-1">
+    <link rel="stylesheet" href="css/style.css?v=connectors-2">
 </head>
 <body class="tree-page-body">
 <header class="topo tree-topbar">
@@ -152,7 +152,7 @@ $seguidas = $seguidasStmt->fetchAll();
     </form>
 </dialog>
 
-<script src="js/tree-view.js?v=hierarchy-1"></script>
+<script src="js/tree-view.js?v=connectors-2"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const tree = new FamilyTreeView({

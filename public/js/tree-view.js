@@ -2,10 +2,10 @@
   'use strict';
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
-  const CARD = { width: 204, height: 86, gapX: 72, gapY: 250 };
-  const UNION_GAP = 26;
-  const BRANCH_GAP = 150;
-  const ROW_GAP = 250;
+  const CARD = { width: 226, height: 112, gapX: 82, gapY: 280 };
+  const UNION_GAP = 34;
+  const BRANCH_GAP = 184;
+  const ROW_GAP = 280;
   const END_STATUSES = new Set(['divorciado', 'encerrado', 'viuvo']);
 
   class FamilyTreeView {
@@ -384,22 +384,60 @@
       const unionLayer = document.createElementNS(SVG_NS, 'g'); unionLayer.classList.add('tree-union-layer');
       this.links.append(parentLayer, unionLayer);
       const drawn = new Set();
-      const groupCenter = (groupId) => {
-        const group = this.graph.groupsById.get(groupId); if (!group) return null;
-        const members = group.members.map((id) => this.positions.get(id)).filter(Boolean); if (!members.length) return null;
-        const left = Math.min(...members.map((position) => position.x));
-        const right = Math.max(...members.map((position) => position.x + CARD.width));
-        const top = Math.min(...members.map((position) => position.y));
-        const bottom = Math.max(...members.map((position) => position.y + CARD.height));
-        return { x: (left + right) / 2, top, bottom };
+      const familyAnchor = (group) => {
+        const members = group.members
+          .map((id) => ({ id, position: this.positions.get(id) }))
+          .filter((item) => item.position)
+          .sort((a, b) => a.position.x - b.position.x);
+        if (!members.length) return null;
+        const left = members[0].position;
+        const right = members[members.length - 1].position;
+        return {
+          // O ponto de saída é o centro da união visível, não o centro de uma subárvore.
+          x: members.length === 1 ? left.x + CARD.width / 2 : (left.x + CARD.width + right.x) / 2,
+          bottom: Math.max(...members.map((item) => item.position.y + CARD.height)),
+        };
       };
-      this.graph.groupsById.forEach((group) => {
-        group.children.forEach((childGroupId) => {
-          const parent = groupCenter(group.id); const child = groupCenter(childGroupId); if (!parent || !child) return;
-          const key = `${group.id}:${childGroupId}`; if (drawn.has(key)) return; drawn.add(key);
-          const middle = parent.bottom + (child.top - parent.bottom) / 2;
-          parentLayer.append(this.path(`M ${parent.x} ${parent.bottom} V ${middle} H ${child.x} V ${child.top}`, 'tree-link tree-link-parent tree-link-family'));
+      const connectorGroups = [...this.graph.groupsById.values()]
+        .filter((group) => group.children.size)
+        .map((group) => ({ group, anchor: familyAnchor(group) }))
+        .filter((item) => item.anchor)
+        .sort((a, b) => a.group.generation - b.group.generation || a.anchor.x - b.anchor.x);
+      const lanesByGeneration = new Map();
+      connectorGroups.forEach((item) => {
+        const level = item.group.generation;
+        if (!lanesByGeneration.has(level)) lanesByGeneration.set(level, []);
+        lanesByGeneration.get(level).push(item.group.id);
+      });
+      const laneIndex = new Map();
+      lanesByGeneration.forEach((ids) => ids.forEach((id, index) => laneIndex.set(id, { index, count: ids.length })));
+
+      connectorGroups.forEach(({ group, anchor: parent }) => {
+        const childIds = [...new Set(group.members.flatMap((memberId) => this.byId.get(memberId)?.children || []))]
+          .map(String)
+          .filter((childId) => this.visibleIds.has(childId) && this.graph.groupByPerson.get(childId) !== group.id && this.positions.has(childId))
+          .sort((a, b) => (this.positions.get(a)?.x || 0) - (this.positions.get(b)?.x || 0));
+        if (!childIds.length) return;
+        const children = childIds.map((id) => {
+          const position = this.positions.get(id);
+          return { x: position.x + CARD.width / 2, top: position.y };
         });
+        const childTop = Math.min(...children.map((child) => child.top));
+        const corridor = childTop - parent.bottom;
+        if (corridor < 24) return;
+        const lane = laneIndex.get(group.id) || { index: 0, count: 1 };
+        // Casais na mesma geração usam faixas diferentes no espaço vertical entre gerações.
+        const laneOffset = 34 + ((lane.index + 1) / (lane.count + 1)) * Math.max(22, corridor - 76);
+        const railY = Math.min(childTop - 28, parent.bottom + laneOffset);
+        const railStart = Math.min(parent.x, ...children.map((child) => child.x));
+        const railEnd = Math.max(parent.x, ...children.map((child) => child.x));
+        let path = `M ${parent.x} ${parent.bottom} V ${railY}`;
+        if (railEnd > railStart) path += ` M ${railStart} ${railY} H ${railEnd}`;
+        children.forEach((child) => { path += ` M ${child.x} ${railY} V ${child.top}`; });
+        const connector = this.path(path, 'tree-link tree-link-parent tree-link-family');
+        connector.dataset.parentIds = group.members.join(',');
+        connector.dataset.childIds = childIds.join(',');
+        parentLayer.append(connector);
       });
       this.visibleIds.forEach((id) => {
         const node = this.byId.get(id); const from = this.positions.get(id); if (!node || !from) return;
