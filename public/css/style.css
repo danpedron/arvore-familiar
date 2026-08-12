@@ -465,3 +465,9 @@ body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:v
 .tree-stage-family-chart .f3-path-to-main { filter:drop-shadow(0 0 3px rgba(38,155,171,.45)); }
 @media (max-width:900px) { .fc-person-card { width:214px; height:108px; padding-right:24px; } .tree-stage-family-chart .card-inner { width:214px; height:108px; } .fc-person-avatar { width:50px; height:50px; } }
 @media print { .tree-stage-family-chart { position:relative; height:900px; overflow:visible; } .tree-stage-family-chart.f3.f3-cont { height:900px; } }
+
+/* Referências entre espaços familiares */
+.family-reference-list{display:grid;gap:8px}.family-reference-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)}.family-reference-row form{margin:0}.fc-reference-badge{display:inline-flex;align-items:center;white-space:nowrap;padding:4px 7px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:9px;line-height:1;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.fc-person-card.is-reference{border-style:dashed}.fc-person-card.is-reference .fc-card-gender-band{background:linear-gradient(90deg,#6366f1,#a78bfa)}
+@media (max-width:700px){.family-reference-row{align-items:flex-start;flex-direction:column}.family-reference-row form{width:100%}.family-reference-row .btn{width:100%}}
+
+.sidebar-origin{margin:0 18px 14px;padding:9px 11px;border:1px dashed #818cf8;border-radius:10px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:700;line-height:1.35}.sidebar-origin[hidden]{display:none}

@@ -27,12 +27,45 @@ function registrarAuditoria(string $entidade, ?int $entidadeId, string $acao, ar
     ]);
 }
 
+function pessoaEhNativaDaFamilia(int $pessoaId, ?int $familiaId = null): bool {
+    $familiaId = $familiaId ?: contextoFamiliaId();
+    $stmt = getConexao()->prepare('SELECT 1 FROM pessoas WHERE id = ? AND familia_id = ? LIMIT 1');
+    $stmt->execute([$pessoaId, $familiaId]);
+    return (bool) $stmt->fetchColumn();
+}
+
+function pessoaEhReferenciada(int $pessoaId, ?int $familiaId = null): bool {
+    $familiaId = $familiaId ?: contextoFamiliaId();
+    $stmt = getConexao()->prepare(
+        "SELECT 1 FROM familia_pessoas fp JOIN pessoas p ON p.id = fp.pessoa_id
+         WHERE fp.familia_id = ? AND fp.pessoa_id = ? AND fp.tipo = 'referenciada' LIMIT 1"
+    );
+    $stmt->execute([$familiaId, $pessoaId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function exigirPessoaDaFamilia(int $pessoaId): array {
     $pessoa = buscarPessoa($pessoaId);
     if (!$pessoa) {
         throw new RuntimeException('Pessoa não encontrada nesta família.');
     }
     return $pessoa;
+}
+
+function exigirPessoaEditavel(int $pessoaId): array {
+    $pessoa = exigirPessoaDaFamilia($pessoaId);
+    if (($pessoa['associacao_tipo'] ?? 'propria') !== 'propria') {
+        $origem = $pessoa['origem_familia_nome'] ?? 'outro espaço familiar';
+        throw new RuntimeException('Esta pessoa é referenciada de ' . $origem . ' e está disponível somente para leitura.');
+    }
+    return $pessoa;
+}
+
+function associarPessoaAoEspaco(int $pessoaId, int $familiaId, string $tipo = 'propria', ?int $usuarioId = null): void {
+    $stmt = getConexao()->prepare(
+        'INSERT IGNORE INTO familia_pessoas (familia_id, pessoa_id, tipo, referenciada_por) VALUES (?, ?, ?, ?)'
+    );
+    $stmt->execute([$familiaId, $pessoaId, $tipo, $usuarioId ?: usuarioAtualId()]);
 }
 
 // Placeholder local (SVG embutido, sem nenhuma requisição de rede) usado quando
@@ -67,6 +100,7 @@ function caminhoFotoValido(?string $caminhoRelativo): string {
 // que a pessoa já tinha preenchido pela tela normal de edição).
 function atualizarCamposBasicos(int $id, array $campos): void {
     if (empty($campos)) return;
+    exigirPessoaEditavel($id);
     $permitidos = ['nome_completo', 'sexo', 'data_nascimento', 'data_falecimento', 'falecido'];
     $campos = array_intersect_key($campos, array_flip($permitidos));
     if (empty($campos)) return;
@@ -96,7 +130,9 @@ function criarPessoaBasica(array $campos): int {
     $colunas = implode(', ', array_keys($dados));
     $marcadores = ':' . implode(', :', array_keys($dados));
     $pdo->prepare("INSERT INTO pessoas ($colunas) VALUES ($marcadores)")->execute($dados);
-    return (int) $pdo->lastInsertId();
+    $idNovo = (int) $pdo->lastInsertId();
+    associarPessoaAoEspaco($idNovo, (int) $dados['familia_id'], 'propria');
+    return $idNovo;
 }
 
 function listarPessoas(string $busca = '', string $ordenar = 'nome_asc'): array {
@@ -111,7 +147,12 @@ function listarPessoas(string $busca = '', string $ordenar = 'nome_asc'): array 
         'criado_desc' => 'criado_em DESC, nome_completo COLLATE utf8mb4_general_ci ASC',
     ];
     $orderBy = $ordens[$ordenar] ?? $ordens['nome_asc'];
-    $sql = "SELECT * FROM pessoas WHERE familia_id = ?";
+    $sql = "SELECT p.*, fp.tipo AS associacao_tipo, fp.referenciada_por,
+                   origem.id AS origem_familia_id, origem.nome AS origem_familia_nome
+            FROM pessoas p
+            JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+            JOIN familias origem ON origem.id = p.familia_id
+            WHERE 1 = 1";
     $params = [$familiaId];
     if ($busca !== '') {
         $sql .= ' AND nome_completo LIKE ?';
@@ -125,8 +166,15 @@ function listarPessoas(string $busca = '', string $ordenar = 'nome_asc'): array 
 
 function buscarPessoa(int $id): ?array {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('SELECT * FROM pessoas WHERE id = ? AND familia_id = ?');
-    $stmt->execute([$id, contextoFamiliaId()]);
+    $stmt = $pdo->prepare(
+        'SELECT p.*, fp.tipo AS associacao_tipo, fp.referenciada_por,
+                origem.id AS origem_familia_id, origem.nome AS origem_familia_nome
+         FROM pessoas p
+         JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+         JOIN familias origem ON origem.id = p.familia_id
+         WHERE p.id = ?'
+    );
+    $stmt->execute([contextoFamiliaId(), $id]);
     $pessoa = $stmt->fetch();
     return $pessoa ?: null;
 }
@@ -151,6 +199,7 @@ function salvarPessoa(array $dados, ?int $id = null): int {
     ];
 
     if ($id) {
+        exigirPessoaEditavel($id);
         $set = implode(', ', array_map(fn($c) => "$c = :$c", array_keys($campos)));
         $stmt = $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id AND familia_id = :familia_id");
         $campos['id'] = $id;
@@ -167,11 +216,13 @@ function salvarPessoa(array $dados, ?int $id = null): int {
     $stmt = $pdo->prepare("INSERT INTO pessoas ($colunas) VALUES ($marcadores)");
     $stmt->execute($campos);
     $idNovo = (int) $pdo->lastInsertId();
+    associarPessoaAoEspaco($idNovo, (int) $campos['familia_id'], 'propria');
     registrarAuditoria('pessoa', $idNovo, 'criacao', ['nome' => $campos['nome_completo']]);
     return $idNovo;
 }
 
 function excluirPessoa(int $id): void {
+    exigirPessoaEditavel($id);
     $pdo = getConexao();
     $stmt = $pdo->prepare('DELETE FROM pessoas WHERE id = ? AND familia_id = ?');
     $stmt->execute([$id, contextoFamiliaId()]);
@@ -179,6 +230,7 @@ function excluirPessoa(int $id): void {
 }
 
 function atualizarFotoPerfil(int $pessoaId, string $caminho): void {
+    exigirPessoaEditavel($pessoaId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('UPDATE pessoas SET foto_perfil = ? WHERE id = ? AND familia_id = ?');
     $stmt->execute([$caminho, $pessoaId, contextoFamiliaId()]);
@@ -189,8 +241,8 @@ function atualizarFotoPerfil(int $pessoaId, string $caminho): void {
 
 function adicionarPaiMae(int $filhoId, int $paiMaeId, string $tipo = 'biologico'): void {
     if ($filhoId === $paiMaeId) return;
-    exigirPessoaDaFamilia($filhoId);
-    exigirPessoaDaFamilia($paiMaeId);
+    exigirPessoaEditavel($filhoId);
+    exigirPessoaEditavel($paiMaeId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT IGNORE INTO relacoes_parentais (filho_id, pai_mae_id, tipo) VALUES (?, ?, ?)');
     $stmt->execute([$filhoId, $paiMaeId, $tipo]);
@@ -198,6 +250,8 @@ function adicionarPaiMae(int $filhoId, int $paiMaeId, string $tipo = 'biologico'
 }
 
 function removerPaiMae(int $filhoId, int $paiMaeId): void {
+    exigirPessoaEditavel($filhoId);
+    exigirPessoaEditavel($paiMaeId);
     $pdo = getConexao();
     $familiaId = contextoFamiliaId();
     $stmt = $pdo->prepare('DELETE FROM relacoes_parentais WHERE filho_id = ? AND pai_mae_id = ? AND EXISTS (SELECT 1 FROM pessoas p WHERE p.id = relacoes_parentais.filho_id AND p.familia_id = ?) AND EXISTS (SELECT 1 FROM pessoas p2 WHERE p2.id = relacoes_parentais.pai_mae_id AND p2.familia_id = ?)');
@@ -207,24 +261,32 @@ function removerPaiMae(int $filhoId, int $paiMaeId): void {
 function listarPais(int $pessoaId): array {
     $pdo = getConexao();
     $stmt = $pdo->prepare(
-        'SELECT p.*, rp.tipo FROM pessoas p
+        'SELECT p.*, fp.tipo AS associacao_tipo, origem.nome AS origem_familia_nome, rp.tipo
+         FROM pessoas p
          JOIN relacoes_parentais rp ON rp.pai_mae_id = p.id
          JOIN pessoas filho ON filho.id = rp.filho_id
-         WHERE rp.filho_id = ? AND p.familia_id = ? AND filho.familia_id = ?'
+         JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+         JOIN familias origem ON origem.id = p.familia_id
+         JOIN familia_pessoas fp_filho ON fp_filho.pessoa_id = filho.id AND fp_filho.familia_id = ?
+         WHERE rp.filho_id = ?'
     );
-    $stmt->execute([$pessoaId, contextoFamiliaId(), contextoFamiliaId()]);
+    $stmt->execute([contextoFamiliaId(), contextoFamiliaId(), $pessoaId]);
     return $stmt->fetchAll();
 }
 
 function listarFilhos(int $pessoaId): array {
     $pdo = getConexao();
     $stmt = $pdo->prepare(
-        'SELECT p.*, rp.tipo FROM pessoas p
+        'SELECT p.*, fp.tipo AS associacao_tipo, origem.nome AS origem_familia_nome, rp.tipo
+         FROM pessoas p
          JOIN relacoes_parentais rp ON rp.filho_id = p.id
          JOIN pessoas pai ON pai.id = rp.pai_mae_id
-         WHERE rp.pai_mae_id = ? AND p.familia_id = ? AND pai.familia_id = ?'
+         JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+         JOIN familias origem ON origem.id = p.familia_id
+         JOIN familia_pessoas fp_pai ON fp_pai.pessoa_id = pai.id AND fp_pai.familia_id = ?
+         WHERE rp.pai_mae_id = ?'
     );
-    $stmt->execute([$pessoaId, contextoFamiliaId(), contextoFamiliaId()]);
+    $stmt->execute([contextoFamiliaId(), contextoFamiliaId(), $pessoaId]);
     return $stmt->fetchAll();
 }
 
@@ -232,8 +294,8 @@ function listarFilhos(int $pessoaId): array {
 
 function adicionarUniao(int $pessoa1Id, int $pessoa2Id, string $tipo = 'casamento', ?string $dataInicio = null): void {
     if ($pessoa1Id === $pessoa2Id) return;
-    exigirPessoaDaFamilia($pessoa1Id);
-    exigirPessoaDaFamilia($pessoa2Id);
+    exigirPessoaEditavel($pessoa1Id);
+    exigirPessoaEditavel($pessoa2Id);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT INTO unioes (pessoa1_id, pessoa2_id, tipo, data_inicio) VALUES (?, ?, ?, ?)');
     $stmt->execute([$pessoa1Id, $pessoa2Id, $tipo, $dataInicio ?: null]);
@@ -248,7 +310,9 @@ function listarConjuges(int $pessoaId): array {
          FROM pessoas p
          JOIN unioes u ON (u.pessoa1_id = p.id OR u.pessoa2_id = p.id)
          JOIN pessoas pessoa_foco ON pessoa_foco.id = ?
-         WHERE (u.pessoa1_id = pessoa_foco.id OR u.pessoa2_id = pessoa_foco.id) AND p.id != pessoa_foco.id AND p.familia_id = ? AND pessoa_foco.familia_id = ?'
+         JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+         JOIN familia_pessoas fp_foco ON fp_foco.pessoa_id = pessoa_foco.id AND fp_foco.familia_id = ?
+         WHERE (u.pessoa1_id = pessoa_foco.id OR u.pessoa2_id = pessoa_foco.id) AND p.id != pessoa_foco.id'
     );
     $stmt->execute([$pessoaId, contextoFamiliaId(), contextoFamiliaId()]);
     return $stmt->fetchAll();
@@ -273,7 +337,7 @@ function atualizarUniao(int $uniaoId, string $tipo, ?string $dataInicio, ?string
 // --- Nomes adicionais (nome de casada, religioso etc.) ---
 
 function adicionarNomeAdicional(int $pessoaId, string $nome, string $tipo = 'casamento', ?int $uniaoId = null, string $observacao = ''): void {
-    exigirPessoaDaFamilia($pessoaId);
+    exigirPessoaEditavel($pessoaId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT INTO nomes_pessoa (pessoa_id, nome, tipo, uniao_id, observacao) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$pessoaId, $nome, $tipo, $uniaoId ?: null, $observacao ?: null]);
@@ -282,8 +346,8 @@ function adicionarNomeAdicional(int $pessoaId, string $nome, string $tipo = 'cas
 
 function listarNomesAdicionais(int $pessoaId): array {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('SELECT n.* FROM nomes_pessoa n JOIN pessoas p ON p.id = n.pessoa_id WHERE n.pessoa_id = ? AND p.familia_id = ? ORDER BY n.criado_em');
-    $stmt->execute([$pessoaId, contextoFamiliaId()]);
+    $stmt = $pdo->prepare('SELECT n.* FROM nomes_pessoa n JOIN familia_pessoas fp ON fp.pessoa_id = n.pessoa_id AND fp.familia_id = ? WHERE n.pessoa_id = ? ORDER BY n.criado_em');
+    $stmt->execute([contextoFamiliaId(), $pessoaId]);
     return $stmt->fetchAll();
 }
 
@@ -299,7 +363,7 @@ function removerNomeAdicional(int $nomeId): void {
 
 function adicionarMidia(array $pessoaIds, string $tipo, string $caminho, string $titulo = ''): int {
     $pessoaIds = array_values(array_unique(array_map('intval', $pessoaIds)));
-    foreach ($pessoaIds as $pid) exigirPessoaDaFamilia($pid);
+    foreach ($pessoaIds as $pid) exigirPessoaEditavel($pid);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT INTO midias (tipo, caminho_arquivo, titulo, enviado_por) VALUES (?, ?, ?, ?)');
     $stmt->execute([$tipo, $caminho, $titulo ?: null, usuarioAtualId()]);
@@ -312,7 +376,7 @@ function adicionarMidia(array $pessoaIds, string $tipo, string $caminho, string 
 }
 
 function vincularMidiaAPessoa(int $midiaId, int $pessoaId): void {
-    exigirPessoaDaFamilia($pessoaId);
+    exigirPessoaEditavel($pessoaId);
     $pdo = getConexao();
     $stmt = $pdo->prepare('INSERT IGNORE INTO midia_pessoa (midia_id, pessoa_id) VALUES (?, ?)');
     $stmt->execute([$midiaId, $pessoaId]);
@@ -322,7 +386,7 @@ function vincularMidiaAPessoa(int $midiaId, int $pessoaId): void {
 // o arquivo é apagado de vez (evita arquivos órfãos ocupando espaço).
 function desvincularMidiaDePessoa(int $midiaId, int $pessoaId): void {
     $pdo = getConexao();
-    exigirPessoaDaFamilia($pessoaId);
+    exigirPessoaEditavel($pessoaId);
     $stmt = $pdo->prepare('DELETE FROM midia_pessoa WHERE midia_id = ? AND pessoa_id = ?');
     $stmt->execute([$midiaId, $pessoaId]);
     if ($stmt->rowCount() === 0) return;
@@ -351,7 +415,7 @@ function listarMidias(int $pessoaId): array {
     $stmt = $pdo->prepare(
         'SELECT m.* FROM midias m
          JOIN midia_pessoa mp ON mp.midia_id = m.id
-         WHERE mp.pessoa_id = ? AND EXISTS (SELECT 1 FROM pessoas p2 WHERE p2.id = mp.pessoa_id AND p2.familia_id = ?)
+         WHERE mp.pessoa_id = ? AND EXISTS (SELECT 1 FROM familia_pessoas fp WHERE fp.pessoa_id = mp.pessoa_id AND fp.familia_id = ?)
          ORDER BY m.criado_em DESC'
     );
     $stmt->execute([$pessoaId, contextoFamiliaId()]);
@@ -363,8 +427,9 @@ function listarPessoasDaMidia(int $midiaId, ?int $excetoPessoaId = null): array 
     $pdo = getConexao();
     $sql = 'SELECT p.id, p.nome_completo FROM pessoas p
             JOIN midia_pessoa mp ON mp.pessoa_id = p.id
-            WHERE mp.midia_id = ? AND p.familia_id = ?';
-    $params = [$midiaId, contextoFamiliaId()];
+            JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+            WHERE mp.midia_id = ?';
+    $params = [contextoFamiliaId(), $midiaId];
     if ($excetoPessoaId) {
         $sql .= ' AND p.id != ?';
         $params[] = $excetoPessoaId;
@@ -383,12 +448,12 @@ function listarMidiasNaoVinculadas(int $pessoaId): array {
          FROM midias m
          JOIN midia_pessoa mp ON mp.midia_id = m.id
          JOIN pessoas p ON p.id = mp.pessoa_id
+         JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
          WHERE m.id NOT IN (SELECT midia_id FROM midia_pessoa WHERE pessoa_id = ?)
-           AND p.familia_id = ?
          GROUP BY m.id
          ORDER BY m.criado_em DESC"
     );
-    $stmt->execute([$pessoaId, contextoFamiliaId()]);
+    $stmt->execute([contextoFamiliaId(), $pessoaId]);
     return $stmt->fetchAll();
 }
 

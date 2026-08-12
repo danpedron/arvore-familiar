@@ -20,7 +20,7 @@ $seguidas = $seguidasStmt->fetchAll();
     <title>Árvore · <?= htmlspecialchars($familiaNome) ?></title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="vendor/family-chart/family-chart.css?v=0.9.0">
-    <link rel="stylesheet" href="css/style.css?v=family-chart-1">
+    <link rel="stylesheet" href="css/style.css?v=family-ref-2">
 </head>
 <body class="tree-page-body">
 <header class="topo tree-topbar">
@@ -60,6 +60,7 @@ $seguidas = $seguidasStmt->fetchAll();
                     <p class="sidebar-place" data-person-location>Local não informado</p>
                 </div>
             </div>
+            <p class="sidebar-origin" data-person-origin hidden></p>
             <div class="sidebar-actions">
                 <a class="sidebar-action is-primary" data-person-profile href="index.php">Perfil</a>
                 <?php if (usuarioPodeEditar()): ?><button class="sidebar-action" type="button" data-tree-action="edit">Editar</button><?php endif; ?>
@@ -155,8 +156,8 @@ $seguidas = $seguidasStmt->fetchAll();
 
 <script src="vendor/family-chart/d3.min.js?v=7.9.0"></script>
 <script src="vendor/family-chart/family-chart.min.js?v=0.9.0"></script>
-<script src="js/tree-view.js?v=family-chart-1"></script>
-<script src="js/tree-view-family-chart.js?v=family-chart-4"></script>
+<script src="js/tree-view.js?v=family-ref-1"></script>
+<script src="js/tree-view-family-chart.js?v=family-ref-1"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const tree = new FamilyTreeView({

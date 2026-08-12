@@ -10,6 +10,11 @@ if (!usuarioPodeEditar()) {
 $id = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $pessoa = $id ? buscarPessoa($id) : null;
 
+if ($id && $pessoa && (($pessoa['associacao_tipo'] ?? 'propria') !== 'propria')) {
+    header('Location: pessoa.php?id=' . $id);
+    exit;
+}
+
 if ($id && !$pessoa) {
     header('Location: index.php');
     exit;
@@ -73,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <title><?= $pessoa ? 'Editar' : 'Nova' ?> pessoa - Árvore Familiar</title>
-    <link rel="stylesheet" href="css/style.css?v=tree-controls-1">
+    <link rel="stylesheet" href="css/style.css?v=family-ref-2">
 </head>
 <body>
 <header class="topo">

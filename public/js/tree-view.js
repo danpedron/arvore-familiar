@@ -86,6 +86,7 @@
           birthPlace: person.localNascimento || '', photo: person.foto || '', status: person.status || 'vivo',
           parents: (person.pais || []).map(String), children: (person.filhos || []).map(String), spouses: (person.conjuges || []).map(String),
           unions: Array.isArray(person.unioes) ? person.unioes : [], updated: person.atualizadoEm || '', created: person.criadoEm || '',
+          readOnly: Boolean(person.somenteLeitura), sourceFamily: person.origemFamiliaNome || '',
         }));
         this.byId = new Map(this.nodes.map((node) => [node.id, node]));
         if (!this.nodes.length) return this.showEmpty();
@@ -538,7 +539,7 @@
         const note = document.createElement('span'); note.className = 'tree-card-relation'; note.textContent = former ? 'Ex-união' : (id === this.focusId ? 'Em foco' : this.relationLabel(position.generation));
         content.append(name, dates, note); card.append(content);
         if (former) { const badge = document.createElement('span'); badge.className = 'tree-former-badge'; badge.textContent = 'ex'; card.append(badge); }
-        const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'tree-card-edit'; edit.title = `Editar ${node.name}`; edit.textContent = '✎'; edit.addEventListener('click', (event) => { event.stopPropagation(); this.select(id); this.openEditPanel(); }); card.append(edit);
+        if (this.canEdit() && !node.readOnly) { const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'tree-card-edit'; edit.title = `Editar ${node.name}`; edit.textContent = '✎'; edit.addEventListener('click', (event) => { event.stopPropagation(); this.select(id); this.openEditPanel(); }); card.append(edit); }
         card.addEventListener('click', () => this.select(id)); card.addEventListener('keydown', (event) => this.cardKeydown(event, node));
         this.cards.append(card);
       });
@@ -584,6 +585,8 @@
     relationLabel(generation) { if (generation < 0) return `${Math.abs(generation)}ª geração acima`; if (generation > 0) return `${generation}ª geração abaixo`; return 'mesma geração'; }
     modeLabel() { return this.modeValue === 'fan' ? 'leque' : this.modeValue === 'lineage' ? 'linhagem' : 'explorador'; }
     canEdit() { return document.body.dataset.canEdit !== 'false' && !!document.querySelector('[data-tree-action="edit"]'); }
+    focusedNode() { return this.byId.get(String(this.focusId)) || null; }
+    isFocusedEditable() { const node = this.focusedNode(); return !!node && !node.readOnly && this.canEdit(); }
 
     unionBetween(a, b) {
       const node = this.byId.get(String(a)); if (!node) return null;
@@ -613,9 +616,12 @@
 
     updatePanel() {
       const node = this.byId.get(String(this.focusId)); if (!node || !this.panel) return;
+       const isReference = !!node.readOnly;
+       ['edit', 'add', 'media'].forEach((action) => { const element = this.panel.querySelector(`[data-tree-action="${action}"]`); if (element) { element.hidden = isReference; element.disabled = isReference; } });
       const set = (selector, value) => { const element = this.panel.querySelector(selector); if (element) element.textContent = value; };
       set('[data-person-name]', node.name); set('[data-person-dates]', node.dates); set('[data-person-location]', node.birthPlace || 'Local de nascimento não informado');
       set('[data-person-relations]', `${node.parents.length} pais · ${node.spouses.length} cônjuges · ${node.children.length} filhos`);
+       const origin = this.panel.querySelector('[data-person-origin]'); if (origin) { origin.hidden = !isReference; origin.textContent = isReference ? `Referenciada de ${node.sourceFamily || 'outro espaço'} · somente leitura` : ''; }
       if (this.breadcrumb) this.breadcrumb.textContent = node.name;
       const profile = this.panel.querySelector('[data-person-profile]'); if (profile) profile.href = `pessoa.php?id=${encodeURIComponent(node.id)}`;
       const photo = this.panel.querySelector('[data-person-photo]'); if (photo) { photo.src = node.photo || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"%3E%3Crect width="120" height="120" fill="%23ecebe7"/%3E%3Ccircle cx="60" cy="43" r="23" fill="%23aaa9a3"/%3E%3Cpath d="M20 112c5-27 24-40 40-40s35 13 40 40" fill="%23aaa9a3"/%3E%3C/svg%3E'; photo.alt = `Foto de ${node.name}`; }
@@ -631,7 +637,7 @@
     }
 
     openEditPanel() {
-      const node = this.byId.get(String(this.focusId)); if (!node || !this.canEdit()) return;
+      const node = this.byId.get(String(this.focusId)); if (!node || !this.isFocusedEditable()) return;
       const old = this.panel.querySelector('.sidebar-edit-form'); if (old) return;
       const form = document.createElement('form'); form.className = 'sidebar-edit-form'; form.innerHTML = `<div class="edit-form-title">Editar detalhes</div><label>Nome de nascimento<input name="nome_completo" required value="${this.escape(node.name)}"></label><label>Apelido<input name="apelido" value="${this.escape(node.shortName === node.name ? '' : node.shortName)}"></label><label>Sexo<select name="sexo"><option value="Desconhecido">Não informado</option><option value="M">Masculino</option><option value="F">Feminino</option><option value="Outro">Outro</option></select></label><label>Nascimento<input name="data_nascimento" type="date" value="${this.escape(node.birth || '')}"></label><label>Local de nascimento<input name="local_nascimento" value="${this.escape(node.birthPlace || '')}"></label><label>Falecimento<input name="data_falecimento" type="date" value="${this.escape(node.death || '')}"></label><div class="edit-form-actions"><button type="button" class="btn btn-secundario" data-cancel-edit>Cancelar</button><button class="btn" type="submit">Salvar</button></div><p class="form-feedback" data-edit-feedback></p>`;
       form.querySelector('[name="sexo"]').value = node.sex; form.addEventListener('submit', (event) => this.saveEdit(event, form)); form.querySelector('[data-cancel-edit]').addEventListener('click', () => form.remove()); this.panel.append(form);
@@ -643,11 +649,11 @@
     }
 
     openAddMenu() {
-      const node = this.byId.get(String(this.focusId)); if (!node) return; const old = this.panel.querySelector('.sidebar-add-menu'); if (old) { old.remove(); return; }
+      const node = this.byId.get(String(this.focusId)); if (!node || !this.isFocusedEditable()) return; const old = this.panel.querySelector('.sidebar-add-menu'); if (old) { old.remove(); return; }
       const menu = document.createElement('div'); menu.className = 'sidebar-add-menu'; menu.innerHTML = `<strong>Adicionar relação</strong><a href="pessoa_editar.php?vincular_a=${encodeURIComponent(node.id)}&tipo_vinculo=pai_mae">＋ Pai ou mãe</a><a href="pessoa_editar.php?vincular_a=${encodeURIComponent(node.id)}&tipo_vinculo=filho">＋ Filho(a)</a><a href="pessoa_editar.php?vincular_a=${encodeURIComponent(node.id)}&tipo_vinculo=conjuge">＋ Cônjuge</a>`; this.panel.append(menu);
     }
     openMoreMenu() { const node = this.byId.get(String(this.focusId)); if (!node) return; const old = this.panel.querySelector('.sidebar-more-menu'); if (old) return old.remove(); const menu = document.createElement('div'); menu.className = 'sidebar-more-menu'; menu.innerHTML = `<a href="pessoa.php?id=${encodeURIComponent(node.id)}">Abrir página completa</a><button type="button" data-tree-action="center">Centralizar no canvas</button>`; menu.querySelector('button').addEventListener('click', () => { menu.remove(); this.centerFocus(); }); this.panel.append(menu); }
-    openProfileMedia() { if (this.focusId) window.location.href = `pessoa.php?id=${encodeURIComponent(this.focusId)}#midias`; }
+    openProfileMedia() { if (this.focusId && this.isFocusedEditable()) window.location.href = `pessoa.php?id=${encodeURIComponent(this.focusId)}#midias`; }
     exportPdf() { const params = new URLSearchParams({ foco: this.focusId || '', modo: this.modeValue, acima: this.ancestorRange?.value || '2', abaixo: this.descendantRange?.value || '2' }); window.open(`arvore_pdf.php?${params}`, '_blank', 'noopener'); }
     openImporter() { window.location.href = 'importar.php'; }
     async saveFollowedTree(event) { event.preventDefault(); const form = event.currentTarget; const feedback = form.querySelector('[data-follow-feedback]'); try { const response = await fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin' }); const result = await response.json(); if (!response.ok || !result.sucesso) throw new Error(result.erro || 'Não foi possível salvar.'); feedback.textContent = 'Atalho salvo.'; form.reset(); setTimeout(() => document.querySelector('#follow-dialog')?.close(), 450); } catch (error) { feedback.textContent = error.message; feedback.className = 'form-feedback is-error'; } }

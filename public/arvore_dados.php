@@ -10,11 +10,13 @@ $pdo = getConexao();
 $familiaId = familiaAtualId();
 
 $pessoasStmt = $pdo->prepare(
-    'SELECT id, nome_completo, apelido, sexo, foto_perfil, data_nascimento,
-            data_falecimento, falecido, local_nascimento, criado_em, atualizado_em
-     FROM pessoas
-     WHERE familia_id = ?
-     ORDER BY nome_completo COLLATE utf8mb4_general_ci, id'
+    'SELECT p.id, p.nome_completo, p.apelido, p.sexo, p.foto_perfil, p.data_nascimento,
+            p.data_falecimento, p.falecido, p.local_nascimento, p.criado_em, p.atualizado_em,
+            fp.tipo AS associacao_tipo, origem.id AS origem_familia_id, origem.nome AS origem_familia_nome
+     FROM pessoas p
+     JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+     JOIN familias origem ON origem.id = p.familia_id
+     ORDER BY p.nome_completo COLLATE utf8mb4_general_ci, p.id'
 );
 $pessoasStmt->execute([$familiaId]);
 $pessoas = $pessoasStmt->fetchAll();
@@ -25,8 +27,8 @@ $validIds = array_fill_keys($ids, true);
 $parentStmt = $pdo->prepare(
     'SELECT rp.filho_id, rp.pai_mae_id, rp.tipo
      FROM relacoes_parentais rp
-     INNER JOIN pessoas filho ON filho.id = rp.filho_id AND filho.familia_id = ?
-     INNER JOIN pessoas pai ON pai.id = rp.pai_mae_id AND pai.familia_id = ?
+     INNER JOIN familia_pessoas filho ON filho.pessoa_id = rp.filho_id AND filho.familia_id = ?
+     INNER JOIN familia_pessoas pai ON pai.pessoa_id = rp.pai_mae_id AND pai.familia_id = ?
      ORDER BY rp.filho_id, rp.pai_mae_id'
 );
 $parentStmt->execute([$familiaId, $familiaId]);
@@ -36,8 +38,8 @@ $unionStmt = $pdo->prepare(
     'SELECT u.id, u.pessoa1_id, u.pessoa2_id, u.tipo, u.status,
             u.data_inicio, u.data_fim
      FROM unioes u
-     INNER JOIN pessoas p1 ON p1.id = u.pessoa1_id AND p1.familia_id = ?
-     INNER JOIN pessoas p2 ON p2.id = u.pessoa2_id AND p2.familia_id = ?
+     INNER JOIN familia_pessoas p1 ON p1.pessoa_id = u.pessoa1_id AND p1.familia_id = ?
+     INNER JOIN familia_pessoas p2 ON p2.pessoa_id = u.pessoa2_id AND p2.familia_id = ?
      ORDER BY u.pessoa1_id, u.pessoa2_id, u.id'
 );
 $unionStmt->execute([$familiaId, $familiaId]);
@@ -103,6 +105,10 @@ foreach ($pessoas as $person) {
         'localNascimento' => (string) ($person['local_nascimento'] ?? ''),
         'foto' => caminhoFotoValido($person['foto_perfil']),
         'status' => !empty($person['falecido']) ? 'falecido' : 'vivo',
+        'associacao' => (string) ($person['associacao_tipo'] ?? 'propria'),
+        'somenteLeitura' => (($person['associacao_tipo'] ?? 'propria') !== 'propria'),
+        'origemFamiliaId' => $person['origem_familia_id'] !== null ? (string) $person['origem_familia_id'] : null,
+        'origemFamiliaNome' => (string) ($person['origem_familia_nome'] ?? ''),
         'pais' => $uniqueIds($parents[$id] ?? []),
         'filhos' => $uniqueIds($children[$id] ?? []),
         'conjuges' => $uniqueIds($spouses[$id] ?? []),
@@ -119,19 +125,20 @@ if ($currentUserId) {
     $focusStmt = $pdo->prepare(
         'SELECT p.id
          FROM pessoas p
+         JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
          INNER JOIN usuarios u ON u.id = ?
-         WHERE p.familia_id = ?
-           AND LOWER(TRIM(p.nome_completo)) = LOWER(TRIM(u.nome))
+         WHERE LOWER(TRIM(p.nome_completo)) = LOWER(TRIM(u.nome))
          ORDER BY p.id
          LIMIT 1'
     );
-    $focusStmt->execute([$currentUserId, $familiaId]);
+    $focusStmt->execute([$familiaId, $currentUserId]);
     $userPersonId = $focusStmt->fetchColumn();
     if ($userPersonId === false) {
         $candidateStmt = $pdo->prepare(
-            'SELECT MIN(id), COUNT(*)
-             FROM pessoas
-             WHERE familia_id = ? AND criado_por = ?'
+            'SELECT MIN(p.id), COUNT(*)
+             FROM pessoas p
+             JOIN familia_pessoas fp ON fp.pessoa_id = p.id AND fp.familia_id = ?
+             WHERE p.criado_por = ?'
         );
         $candidateStmt->execute([$familiaId, $currentUserId]);
         [$candidateId, $candidateCount] = $candidateStmt->fetch(PDO::FETCH_NUM) ?: [null, 0];

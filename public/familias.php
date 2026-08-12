@@ -17,6 +17,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         exigirCsrf($_POST['csrf_token'] ?? null);
         $acao = $_POST['acao'] ?? '';
+        if ($acao === 'referenciar_pessoa') {
+            if (!usuarioPodeAdministrarFamilia()) throw new RuntimeException('Somente o responsável pelo espaço de destino pode criar referências.');
+            $pessoaId = (int) ($_POST['pessoa_id'] ?? 0);
+            if (!$pessoaId) throw new RuntimeException('Selecione uma pessoa para referenciar.');
+            $fonteStmt = $pdo->prepare(
+                'SELECT p.id, p.nome_completo, p.familia_id, f.nome AS familia_nome
+                 FROM pessoas p
+                 JOIN familias f ON f.id = p.familia_id
+                 JOIN familia_usuarios fu ON fu.familia_id = p.familia_id AND fu.usuario_id = ?
+                 WHERE p.id = ? AND p.familia_id <> ?
+                 LIMIT 1'
+            );
+            $fonteStmt->execute([usuarioAtualId(), $pessoaId, familiaAtualId()]);
+            $fonte = $fonteStmt->fetch();
+            if (!$fonte) throw new RuntimeException('Pessoa não encontrada em um espaço que você pode consultar.');
+            associarPessoaAoEspaco($pessoaId, familiaAtualId(), 'referenciada', usuarioAtualId());
+            registrarAuditoria('familia_pessoas', $pessoaId, 'referencia_criada', ['familia_origem' => (int) $fonte['familia_id'], 'familia_destino' => familiaAtualId()]);
+            $mensagem = $fonte['nome_completo'] . ' agora está disponível neste espaço em modo somente leitura.';
+        }
+        if ($acao === 'desreferenciar_pessoa') {
+            if (!usuarioPodeAdministrarFamilia()) throw new RuntimeException('Somente o responsável pelo espaço pode remover referências.');
+            $pessoaId = (int) ($_POST['pessoa_id'] ?? 0);
+            $stmt = $pdo->prepare("DELETE FROM familia_pessoas WHERE familia_id = ? AND pessoa_id = ? AND tipo = 'referenciada'");
+            $stmt->execute([familiaAtualId(), $pessoaId]);
+            registrarAuditoria('familia_pessoas', $pessoaId, 'referencia_removida');
+            $mensagem = 'A referência foi removida deste espaço. O registro original permanece intacto.';
+        }
         if ($acao === 'selecionar') {
             $id = (int) ($_POST['familia_id'] ?? 0);
             if (!atualizarContextoFamilia($id)) throw new RuntimeException('Você não tem acesso a esse espaço.');
@@ -91,17 +118,44 @@ foreach ($familias as $familia) {
     }
 }
 $membros = [];
+$referencias = [];
+$pessoasDisponiveisReferencia = [];
 if ($familiaSelecionada) {
     $stmt = $pdo->prepare('SELECT u.id, u.nome, u.email, fu.papel, fu.criado_em FROM usuarios u JOIN familia_usuarios fu ON fu.usuario_id = u.id WHERE fu.familia_id = ? ORDER BY FIELD(fu.papel, "owner", "editor", "viewer"), u.nome');
     $stmt->execute([$familiaSelecionada]);
     $membros = $stmt->fetchAll();
+    $stmt = $pdo->prepare(
+        "SELECT p.id, p.nome_completo, origem.id AS origem_familia_id, origem.nome AS origem_familia_nome, fp.criado_em
+         FROM familia_pessoas fp
+         JOIN pessoas p ON p.id = fp.pessoa_id
+         JOIN familias origem ON origem.id = p.familia_id
+         WHERE fp.familia_id = ? AND fp.tipo = 'referenciada'
+         ORDER BY origem.nome, p.nome_completo"
+    );
+    $stmt->execute([$familiaSelecionada]);
+    $referencias = $stmt->fetchAll();
+    $familiaIdsFonte = array_values(array_filter(array_map(static fn(array $f): int => (int) $f['id'], $familias), static fn(int $id): bool => $id !== (int) $familiaSelecionada));
+    if ($familiaIdsFonte) {
+        $placeholders = implode(',', array_fill(0, count($familiaIdsFonte), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT p.id, p.nome_completo, f.id AS familia_id, f.nome AS familia_nome
+             FROM pessoas p
+             JOIN familias f ON f.id = p.familia_id
+             JOIN familia_usuarios fu ON fu.familia_id = f.id AND fu.usuario_id = ?
+             LEFT JOIN familia_pessoas atual ON atual.familia_id = ? AND atual.pessoa_id = p.id
+             WHERE p.familia_id IN ($placeholders) AND atual.pessoa_id IS NULL
+             ORDER BY f.nome, p.nome_completo"
+        );
+        $stmt->execute(array_merge([usuarioAtualId(), $familiaSelecionada], $familiaIdsFonte));
+        $pessoasDisponiveisReferencia = $stmt->fetchAll();
+    }
 }
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=family-settings-1">
+    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=family-ref-2">
 </head>
 <body>
 <header class="topo"><a class="brand" href="index.php">Árvore Familiar</a><nav><a href="index.php">Painel</a><a href="arvore.php">Explorar árvore</a><a href="familias.php" aria-current="page">Famílias</a><span class="user-chip"><?= htmlspecialchars(usuarioAtualNome() ?: '') ?></span><a href="logout.php">Sair</a></nav></header>
@@ -123,6 +177,12 @@ if ($familiaSelecionada) {
     <?php if ($familiaSelecionada && usuarioPodeAdministrarFamilia()): ?>
     <section class="surface panel" style="margin-top:22px"><div class="panel-header"><div><h2>Identificação do espaço</h2><span class="muted small">O nome aparece na árvore, na seleção de famílias e nos convites. O endereço interno do espaço não é alterado.</span></div></div>
         <form class="dashboard-layout" style="grid-template-columns:minmax(220px,1fr) minmax(220px,1.4fr) 150px;gap:10px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="atualizar"><label>Nome do espaço<input name="nome" required minlength="3" maxlength="180" value="<?= htmlspecialchars($familiaAtiva['nome'] ?? '') ?>"></label><label>Descrição <span class="muted">(opcional)</span><input name="descricao" maxlength="500" value="<?= htmlspecialchars($familiaAtiva['descricao'] ?? '') ?>" placeholder="Ex.: Descendentes de Antônio Pedron"></label><div style="display:flex;align-items:flex-end"><button class="btn" type="submit">Salvar nome</button></div></form>
+    </section>
+    <section class="surface panel" style="margin-top:22px"><div class="panel-header"><div><h2>Pessoas de outros espaços</h2><span class="muted small">Referencie alguém já cadastrado em outro espaço para evitar duplicação. A origem continua sendo a fonte oficial e a pessoa ficará somente para leitura aqui.</span></div></div>
+        <?php if ($pessoasDisponiveisReferencia): ?>
+        <form class="dashboard-layout" style="grid-template-columns:minmax(0,1fr) 150px;gap:10px;margin-bottom:18px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="referenciar_pessoa"><label>Pessoa para referenciar<select name="pessoa_id" required><option value="">Selecione...</option><?php $familiaReferenciaAtual = ''; foreach ($pessoasDisponiveisReferencia as $opcao): if ($familiaReferenciaAtual !== $opcao['familia_nome']): $familiaReferenciaAtual = $opcao['familia_nome']; ?><option disabled>— <?= htmlspecialchars($familiaReferenciaAtual) ?> —</option><?php endif; ?><option value="<?= (int) $opcao['id'] ?>"><?= htmlspecialchars($opcao['nome_completo']) ?></option><?php endforeach; ?></select></label><div style="display:flex;align-items:flex-end"><button class="btn" type="submit">Referenciar pessoa</button></div></form>
+        <?php else: ?><p class="muted">Não há pessoas disponíveis em outros espaços acessíveis ou todas já estão referenciadas.</p><?php endif; ?>
+        <?php if ($referencias): ?><div class="family-reference-list"><?php foreach ($referencias as $referencia): ?><div class="family-reference-row"><div><strong><?= htmlspecialchars($referencia['nome_completo']) ?></strong><div class="muted small">Origem: <?= htmlspecialchars($referencia['origem_familia_nome']) ?></div></div><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="desreferenciar_pessoa"><input type="hidden" name="pessoa_id" value="<?= (int) $referencia['id'] ?>"><button class="btn btn-ghost btn-small" type="submit">Remover referência</button></form></div><?php endforeach; ?></div><?php endif; ?>
     </section>
     <section class="surface panel" style="margin-top:22px"><div class="panel-header"><div><h2>Membros de <?= htmlspecialchars(familiaAtualNome() ?: 'espaço') ?></h2><span class="muted small">O papel define se a pessoa pode apenas visualizar ou também editar.</span></div></div>
         <form class="dashboard-layout" style="grid-template-columns: minmax(0,1fr) 180px 130px; gap:10px; margin-bottom:18px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="convidar"><input type="email" name="email" placeholder="E-mail da conta" required><select name="papel"><option value="viewer">Visualizador</option><option value="editor">Editor</option></select><button class="btn" type="submit">Compartilhar</button></form>

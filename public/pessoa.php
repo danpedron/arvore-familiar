@@ -11,10 +11,12 @@ if (!$pessoa) {
     header('Location: index.php');
     exit;
 }
+$somenteLeitura = (($pessoa['associacao_tipo'] ?? 'propria') !== 'propria');
+$podeEditarPessoa = $podeEditar && !$somenteLeitura;
 
 // Ações via POST (adicionar relações, nomes e mídias)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!$podeEditar) {
+    if (!$podeEditarPessoa) {
         http_response_code(403);
         exit('Seu papel neste espaço permite apenas visualização.');
     }
@@ -92,7 +94,7 @@ $rotulosTipoNome = [
 <head>
     <meta charset="UTF-8">
     <title><?= htmlspecialchars($pessoa['nome_completo']) ?> - Árvore Familiar</title>
-    <link rel="stylesheet" href="css/style.css?v=tree-controls-1">
+    <link rel="stylesheet" href="css/style.css?v=family-ref-2">
 </head>
 <body>
 <header class="topo">
@@ -132,9 +134,9 @@ $rotulosTipoNome = [
 
             <?php if ($pessoa['biografia']): ?><p><?= nl2br(htmlspecialchars($pessoa['biografia'])) ?></p><?php endif; ?>
 
-            <?php if ($podeEditar): ?><a href="pessoa_editar.php?id=<?= $id ?>" class="btn">Editar dados</a><?php endif; ?>
+            <?php if ($podeEditarPessoa): ?><a href="pessoa_editar.php?id=<?= $id ?>" class="btn">Editar dados</a><?php endif; ?>
             <a href="arvore.php?foco=<?= $id ?>" class="btn btn-secundario">Ver na árvore</a>
-            <?php if ($podeEditar): ?>
+            <?php if ($podeEditarPessoa): ?>
             <form method="post" style="display:inline;" onsubmit="return confirm('Excluir esta pessoa e todas as suas relações e mídias?');">
                 <input type="hidden" name="acao" value="excluir_pessoa">
                 <button type="submit" class="btn btn-perigo">Excluir pessoa</button>
@@ -142,6 +144,7 @@ $rotulosTipoNome = [
             <?php endif; ?>
         </div>
     </div>
+    <?php if ($somenteLeitura): ?><div class="sucesso" style="margin-top:16px"><strong>Referência somente leitura.</strong> Esta pessoa pertence originalmente a <strong><?= htmlspecialchars($pessoa['origem_familia_nome'] ?? 'outro espaço') ?></strong>. Os dados, relações e mídias devem ser alterados no espaço de origem.</div><?php endif; ?>
 
     <!-- Nomes adicionais -->
     <div class="card">
@@ -154,16 +157,16 @@ $rotulosTipoNome = [
                 <?php foreach ($nomesAdicionais as $n): ?>
                     <li>
                         <span><strong><?= htmlspecialchars($n['nome']) ?></strong> <span style="color:#777; font-size:0.85em;">(<?= htmlspecialchars($rotulosTipoNome[$n['tipo']] ?? $n['tipo']) ?><?= $n['observacao'] ? ' — ' . htmlspecialchars($n['observacao']) : '' ?>)</span></span>
-                        <form method="post" onsubmit="return confirm('Remover este nome?');">
+                        <?php if (!$somenteLeitura): ?><form method="post" onsubmit="return confirm('Remover este nome?');">
                             <input type="hidden" name="acao" value="remove_nome">
                             <input type="hidden" name="nome_id" value="<?= $n['id'] ?>">
                             <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
-                        </form>
+                        </form><?php endif; ?>
                     </li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
-        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+        <?php if (!$somenteLeitura): ?><form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_nome">
             <div style="flex:1; min-width:180px;">
                 <label>Novo nome</label>
@@ -190,7 +193,7 @@ $rotulosTipoNome = [
             </div>
             <?php endif; ?>
             <button type="submit">Adicionar</button>
-        </form>
+        </form><?php endif; ?>
     </div>
 
     <!-- Pais -->
@@ -200,15 +203,15 @@ $rotulosTipoNome = [
             <?php foreach ($pais as $p): ?>
                 <li>
                     <a href="pessoa.php?id=<?= $p['id'] ?>"><?= htmlspecialchars($p['nome_completo']) ?></a>
-                    <form method="post" onsubmit="return confirm('Remover este vínculo?');">
-                        <input type="hidden" name="acao" value="remove_pai">
-                        <input type="hidden" name="pai_mae_id" value="<?= $p['id'] ?>">
-                        <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
-                    </form>
+                        <?php if (!$somenteLeitura): ?><form method="post" onsubmit="return confirm('Remover este vínculo?');">
+                            <input type="hidden" name="acao" value="remove_pai">
+                            <input type="hidden" name="pai_mae_id" value="<?= $p['id'] ?>">
+                            <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
+                        </form><?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ul>
-        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+        <?php if (!$somenteLeitura): ?><form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_pai">
             <div style="flex:1; min-width:180px;">
                 <label>Vincular pai/mãe já cadastrado(a)</label>
@@ -223,7 +226,7 @@ $rotulosTipoNome = [
         </form>
         <p style="margin-top:10px;">
             <a href="pessoa_editar.php?vincular_a=<?= $id ?>&tipo_vinculo=pai_mae" class="btn btn-secundario">+ Cadastrar novo pai/mãe</a>
-        </p>
+        </p><?php endif; ?>
     </div>
 
     <!-- Cônjuges -->
@@ -240,17 +243,17 @@ $rotulosTipoNome = [
                                 (<?= htmlspecialchars($c['status']) ?>)
                             </span>
                         </span>
-                        <span>
+                        <?php if (!$somenteLeitura): ?><span>
                             <button type="button" class="btn-secundario" style="margin:0; padding:4px 10px;" onclick="document.getElementById('<?= $editId ?>').classList.toggle('aberto')">Editar</button>
                             <form method="post" style="display:inline;" onsubmit="return confirm('Remover esta união?');">
                                 <input type="hidden" name="acao" value="remove_uniao">
                                 <input type="hidden" name="uniao_id" value="<?= $c['uniao_id'] ?>">
                                 <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
                             </form>
-                        </span>
+                        </span><?php endif; ?>
                     </div>
 
-                    <form method="post" id="<?= $editId ?>" class="form-edicao-uniao" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-top:10px;">
+                    <?php if (!$somenteLeitura): ?><form method="post" id="<?= $editId ?>" class="form-edicao-uniao" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-top:10px;">
                         <input type="hidden" name="acao" value="editar_uniao">
                         <input type="hidden" name="uniao_id" value="<?= $c['uniao_id'] ?>">
                         <div>
@@ -278,11 +281,11 @@ $rotulosTipoNome = [
                             </select>
                         </div>
                         <button type="submit">Salvar</button>
-                    </form>
+                    </form><?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ul>
-        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+        <?php if (!$somenteLeitura): ?><form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_conjuge">
             <div style="flex:1; min-width:180px;">
                 <label>Vincular cônjuge já cadastrado(a)</label>
@@ -310,7 +313,7 @@ $rotulosTipoNome = [
         </form>
         <p style="margin-top:10px;">
             <a href="pessoa_editar.php?vincular_a=<?= $id ?>&tipo_vinculo=conjuge" class="btn btn-secundario">+ Cadastrar novo cônjuge</a>
-        </p>
+        </p><?php endif; ?>
     </div>
 
     <!-- Filhos -->
@@ -320,15 +323,15 @@ $rotulosTipoNome = [
             <?php foreach ($filhos as $f): ?>
                 <li>
                     <a href="pessoa.php?id=<?= $f['id'] ?>"><?= htmlspecialchars($f['nome_completo']) ?></a>
-                    <form method="post" onsubmit="return confirm('Remover este vínculo?');">
-                        <input type="hidden" name="acao" value="remove_filho">
-                        <input type="hidden" name="filho_id" value="<?= $f['id'] ?>">
-                        <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
-                    </form>
+                        <?php if (!$somenteLeitura): ?><form method="post" onsubmit="return confirm('Remover este vínculo?');">
+                            <input type="hidden" name="acao" value="remove_filho">
+                            <input type="hidden" name="filho_id" value="<?= $f['id'] ?>">
+                            <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px;">Remover</button>
+                        </form><?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ul>
-        <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+        <?php if (!$somenteLeitura): ?><form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
             <input type="hidden" name="acao" value="add_filho">
             <div style="flex:1; min-width:180px;">
                 <label>Vincular filho(a) já cadastrado(a)</label>
@@ -343,7 +346,7 @@ $rotulosTipoNome = [
         </form>
         <p style="margin-top:10px;">
             <a href="pessoa_editar.php?vincular_a=<?= $id ?>&tipo_vinculo=filho" class="btn btn-secundario">+ Cadastrar novo filho(a)</a>
-        </p>
+        </p><?php endif; ?>
     </div>
 
     <!-- Fotos e documentos -->
@@ -365,25 +368,25 @@ $rotulosTipoNome = [
                             Também vinculada a: <?= htmlspecialchars(implode(', ', array_column($outrasPessoas, 'nome_completo'))) ?>
                         </p>
                     <?php endif; ?>
-                    <form method="post" onsubmit="return confirm('Desvincular este arquivo desta pessoa? (se não estiver vinculado a mais ninguém, será apagado)');" style="margin-top:4px;">
+                    <?php if (!$somenteLeitura): ?><form method="post" onsubmit="return confirm('Desvincular este arquivo desta pessoa? (se não estiver vinculado a mais ninguém, será apagado)');" style="margin-top:4px;">
                         <input type="hidden" name="acao" value="desvincular_midia">
                         <input type="hidden" name="midia_id" value="<?= $m['id'] ?>">
                         <button type="submit" class="btn-perigo" style="margin:0; padding:4px 10px; width:100%;">Desvincular</button>
-                    </form>
+                    </form><?php endif; ?>
                 </div>
             <?php endforeach; ?>
         </div>
 
-        <form method="post" enctype="multipart/form-data" style="margin-top:16px;">
+        <?php if (!$somenteLeitura): ?><form method="post" enctype="multipart/form-data" style="margin-top:16px;">
             <input type="hidden" name="acao" value="add_midia">
             <label>Título (opcional, usado apenas se enviar um único arquivo)</label>
             <input type="text" name="titulo">
             <label>Arquivos (fotos ou documentos — pode selecionar vários de uma vez)</label>
             <input type="file" name="arquivos[]" multiple>
             <button type="submit">Enviar</button>
-        </form>
+        </form><?php endif; ?>
 
-        <?php if (!empty($midiasDisponiveis)): ?>
+        <?php if (!$somenteLeitura && !empty($midiasDisponiveis)): ?>
             <form method="post" style="display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-top:20px; border-top:1px solid #eee; padding-top:16px;">
                 <input type="hidden" name="acao" value="vincular_midia_existente">
                 <div style="flex:1; min-width:220px;">
