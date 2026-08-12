@@ -304,7 +304,7 @@ form label { display: block; margin-top: 15px; color: #425149; font-size: 13px; 
 /* Explorer visual — inspired family tree workspace */
 :root { --explorer-bg:#f4f5f6; --explorer-line:#cfd3d6; --explorer-ink:#2f3437; --explorer-muted:#6f777d; --explorer-orange:#d86d26; --explorer-blue:#2d9cab; --explorer-rose:#db8b9a; }
 body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:var(--explorer-bg); color:var(--explorer-ink); }
-.tree-topbar { height:62px; padding:0 28px; background:#fff; border-bottom:1px solid #e5e6e7; }
+.tree-topbar { height:62px; min-height:62px; padding:0 28px; background:#fff; border-bottom:1px solid #e5e6e7; }
 .tree-topbar nav { gap:22px; }
 .heritage-explorer { height:calc(100dvh - 62px); min-height:0; display:flex; flex-direction:column; background:#f5f6f7; }
 .explorer-breadcrumb { min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 28px; background:#fff; border-bottom:1px solid #e1e3e4; }
