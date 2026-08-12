@@ -161,7 +161,7 @@ if ($familiaSelecionada) {
         <?php foreach ($familias as $familia): ?>
             <article class="surface family-card <?= (int) $familia['id'] === (int) $familiaSelecionada ? 'is-active' : '' ?>">
                 <h3><?= htmlspecialchars($familia['nome']) ?></h3><p><?= htmlspecialchars($familia['descricao'] ?: 'Espaço colaborativo para a sua genealogia.') ?></p>
-                <div class="family-meta"><span><?= (int) $familia['total_pessoas'] ?> pessoas</span><span><?= (int) $familia['total_membros'] ?> membros</span><span class="role"><?= htmlspecialchars($familia['papel']) ?></span></div>
+                <div class="family-meta"><span><?= (int) $familia['total_pessoas'] ?> <?= (int) $familia['total_pessoas'] === 1 ? 'pessoa disponível' : 'pessoas disponíveis' ?></span><?php if (!empty($familia['total_referenciadas'])): ?><span><?= (int) $familia['total_referenciadas'] ?> <?= (int) $familia['total_referenciadas'] === 1 ? 'referenciada' : 'referenciadas' ?></span><?php endif; ?><span><?= (int) $familia['total_membros'] ?> membros</span><span class="role"><?= htmlspecialchars($familia['papel']) ?></span></div>
                 <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="selecionar"><input type="hidden" name="familia_id" value="<?= (int) $familia['id'] ?>"><button class="btn <?= (int) $familia['id'] === (int) $familiaSelecionada ? 'btn-secundario' : '' ?>" type="submit"><?= (int) $familia['id'] === (int) $familiaSelecionada ? 'Espaço ativo' : 'Entrar neste espaço' ?></button></form>
             </article>
         <?php endforeach; ?>

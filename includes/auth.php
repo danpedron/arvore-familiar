@@ -183,7 +183,8 @@ function listarFamiliasDaComunidade(?int $usuarioId = null): array {
     $stmt = $pdo->prepare(
         "SELECT f.id, f.nome, f.slug, f.descricao, f.criado_em,
                 COALESCE(fu.papel, 'community') AS papel,
-                (SELECT COUNT(*) FROM pessoas p WHERE p.familia_id = f.id) AS total_pessoas,
+                (SELECT COUNT(*) FROM familia_pessoas fp WHERE fp.familia_id = f.id) AS total_pessoas,
+                (SELECT COUNT(*) FROM familia_pessoas fp WHERE fp.familia_id = f.id AND fp.tipo = 'referenciada') AS total_referenciadas,
                 (SELECT COUNT(*) FROM familia_usuarios fu2 WHERE fu2.familia_id = f.id) AS total_membros
          FROM familias f
          LEFT JOIN familia_usuarios fu ON fu.familia_id = f.id AND fu.usuario_id = ?
