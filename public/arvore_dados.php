@@ -11,7 +11,7 @@ $familiaId = familiaAtualId();
 
 $pessoasStmt = $pdo->prepare(
     'SELECT id, nome_completo, apelido, sexo, foto_perfil, data_nascimento,
-            data_falecimento, falecido, local_nascimento, atualizado_em
+            data_falecimento, falecido, local_nascimento, criado_em, atualizado_em
      FROM pessoas
      WHERE familia_id = ?
      ORDER BY nome_completo COLLATE utf8mb4_general_ci, id'
@@ -63,6 +63,8 @@ foreach ($unionRows as $row) {
     $spouses[$personTwo][] = $personOne;
     $union = [
         'id' => (int) $row['id'],
+        'pessoa1' => (string) $row['pessoa1_id'],
+        'pessoa2' => (string) $row['pessoa2_id'],
         'tipo' => (string) ($row['tipo'] ?? ''),
         'status' => (string) ($row['status'] ?? ''),
         'inicio' => $row['data_inicio'],
