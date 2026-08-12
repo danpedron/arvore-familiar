@@ -6,6 +6,9 @@ exigirFamilia();
 ob_start();
 include __DIR__ . '/arvore_dados.php';
 $json = ob_get_clean();
+// arvore_dados.php define Content-Type JSON; este endpoint precisa retornar HTML imprimível.
+header_remove('Content-Type');
+header('Content-Type: text/html; charset=utf-8');
 $data = json_decode($json, true) ?: [];
 $pessoas = $data['pessoas'] ?? [];
 $byId = [];
