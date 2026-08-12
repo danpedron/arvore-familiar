@@ -2,7 +2,6 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 exigirFamilia();
-$podeEditar = usuarioPodeEditar();
 
 $id = (int) ($_GET['id'] ?? 0);
 $pessoa = buscarPessoa($id);
@@ -11,8 +10,10 @@ if (!$pessoa) {
     header('Location: index.php');
     exit;
 }
-$somenteLeitura = (($pessoa['associacao_tipo'] ?? 'propria') !== 'propria');
-$podeEditarPessoa = $podeEditar && !$somenteLeitura;
+$podeEditarPessoa = usuarioPodeEditarPessoa($id);
+$somenteLeitura = !$podeEditarPessoa;
+$ehReferencia = (($pessoa['associacao_tipo'] ?? 'propria') === 'referenciada');
+$podeExcluirPessoa = $podeEditarPessoa && ((int) ($pessoa['familia_id'] ?? 0) === (int) familiaAtualId());
 
 // Ações via POST (adicionar relações, nomes e mídias)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -94,7 +95,7 @@ $rotulosTipoNome = [
 <head>
     <meta charset="UTF-8">
     <title><?= htmlspecialchars($pessoa['nome_completo']) ?> - Árvore Familiar</title>
-    <link rel="stylesheet" href="css/style.css?v=family-ref-2">
+    <link rel="stylesheet" href="css/style.css?v=community-1">
 </head>
 <body>
 <header class="topo">
@@ -136,15 +137,16 @@ $rotulosTipoNome = [
 
             <?php if ($podeEditarPessoa): ?><a href="pessoa_editar.php?id=<?= $id ?>" class="btn">Editar dados</a><?php endif; ?>
             <a href="arvore.php?foco=<?= $id ?>" class="btn btn-secundario">Ver na árvore</a>
-            <?php if ($podeEditarPessoa): ?>
+            <?php if ($podeExcluirPessoa): ?>
             <form method="post" style="display:inline;" onsubmit="return confirm('Excluir esta pessoa e todas as suas relações e mídias?');">
                 <input type="hidden" name="acao" value="excluir_pessoa">
                 <button type="submit" class="btn btn-perigo">Excluir pessoa</button>
             </form>
+            <?php elseif ($ehReferencia): ?><span class="muted small">A exclusão só está disponível na família de origem.</span>
             <?php endif; ?>
         </div>
     </div>
-    <?php if ($somenteLeitura): ?><div class="sucesso" style="margin-top:16px"><strong>Referência somente leitura.</strong> Esta pessoa pertence originalmente a <strong><?= htmlspecialchars($pessoa['origem_familia_nome'] ?? 'outro espaço') ?></strong>. Os dados, relações e mídias devem ser alterados no espaço de origem.</div><?php endif; ?>
+    <?php if ($ehReferencia): ?><div class="sucesso" style="margin-top:16px"><strong>Pessoa referenciada.</strong> Esta pessoa pertence originalmente a <strong><?= htmlspecialchars($pessoa['origem_familia_nome'] ?? 'outro espaço') ?></strong>. <?php if ($podeEditarPessoa): ?>Você tem permissão para editar os dados compartilhados; a exclusão permanece restrita à origem.<?php else: ?>Os dados, relações e mídias devem ser alterados por um editor da família de origem.<?php endif; ?></div><?php endif; ?>
 
     <!-- Nomes adicionais -->
     <div class="card">

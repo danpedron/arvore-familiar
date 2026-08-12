@@ -2,22 +2,21 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 exigirFamilia();
-if (!usuarioPodeEditar()) {
-    http_response_code(403);
-    exit('Seu papel neste espaço permite apenas visualização.');
-}
 
 $id = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $pessoa = $id ? buscarPessoa($id) : null;
 
-if ($id && $pessoa && (($pessoa['associacao_tipo'] ?? 'propria') !== 'propria')) {
-    header('Location: pessoa.php?id=' . $id);
-    exit;
-}
-
 if ($id && !$pessoa) {
     header('Location: index.php');
     exit;
+}
+if ($id && !usuarioPodeEditarPessoa($id)) {
+    http_response_code(403);
+    exit('Você não tem permissão para editar esta pessoa na família de origem.');
+}
+if (!$id && !usuarioPodeEditar()) {
+    http_response_code(403);
+    exit('Seu papel neste espaço permite apenas visualização para cadastrar uma nova pessoa.');
 }
 
 // Suporte a "cadastrar e já vincular": veio de pessoa.php pedindo para
@@ -78,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <title><?= $pessoa ? 'Editar' : 'Nova' ?> pessoa - Árvore Familiar</title>
-    <link rel="stylesheet" href="css/style.css?v=family-ref-2">
+    <link rel="stylesheet" href="css/style.css?v=community-1">
 </head>
 <body>
 <header class="topo">

@@ -92,6 +92,7 @@ foreach ($pessoas as $person) {
     $parts = preg_split('/\s+/', $name, -1, PREG_SPLIT_NO_EMPTY);
     $shortName = (string) ($person['apelido'] ?: ($parts[0] ?? $name));
     $gender = in_array($person['sexo'], ['M', 'F'], true) ? $person['sexo'] : 'neutral';
+    $editavel = usuarioPodeEditarPessoa((int) $person['id']);
     $output[] = [
         'id' => $id,
         'nome' => $name,
@@ -106,7 +107,9 @@ foreach ($pessoas as $person) {
         'foto' => caminhoFotoValido($person['foto_perfil']),
         'status' => !empty($person['falecido']) ? 'falecido' : 'vivo',
         'associacao' => (string) ($person['associacao_tipo'] ?? 'propria'),
-        'somenteLeitura' => (($person['associacao_tipo'] ?? 'propria') !== 'propria'),
+        'editavel' => $editavel,
+        // Mantido para clientes antigos, mas agora representa a permissão efetiva.
+        'somenteLeitura' => !$editavel,
         'origemFamiliaId' => $person['origem_familia_id'] !== null ? (string) $person['origem_familia_id'] : null,
         'origemFamiliaNome' => (string) ($person['origem_familia_nome'] ?? ''),
         'pais' => $uniqueIds($parents[$id] ?? []),

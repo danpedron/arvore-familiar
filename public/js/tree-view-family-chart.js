@@ -63,16 +63,17 @@
     const avatar = validPhoto
       ? `<img class="fc-person-avatar" src="${this.escape(photo)}" alt="">`
       : `<span class="fc-person-avatar fc-person-initials">${this.escape((node.shortName || node.name || '?').slice(0, 1).toUpperCase())}</span>`;
-    const relation = node.readOnly
-      ? `Referência · ${node.sourceFamily || 'outro espaço'}`
+    const isReference = node.association === 'referenciada';
+    const relation = isReference
+      ? `Referenciada · ${node.sourceFamily || 'outro espaço'}`
       : (focus ? 'Em foco' : (former ? 'Ex-união' : 'Ramo familiar'));
-    const edit = this.canEdit() && !node.readOnly
+    const edit = node.editavel
       ? `<button class="fc-card-edit" type="button" data-family-edit="${this.escape(id)}" aria-label="Editar ${this.escape(node.name)}">✎</button>`
       : '';
-    const referenceBadge = node.readOnly
-      ? `<b class="fc-reference-badge" title="Pessoa referenciada de ${this.escape(node.sourceFamily || 'outro espaço')}">somente leitura</b>`
+    const referenceBadge = isReference
+      ? `<b class="fc-reference-badge" title="Pessoa referenciada de ${this.escape(node.sourceFamily || 'outro espaço')}">referenciada</b>`
       : '';
-    return `<article class="fc-person-card fc-person-${gender}${focus ? ' is-focus' : ''}${former ? ' is-former' : ''}${node.readOnly ? ' is-reference' : ''}${node.status === 'falecido' ? ' is-deceased' : ''}" data-person-id="${this.escape(id)}" title="${node.readOnly ? `Origem: ${this.escape(node.sourceFamily || 'outro espaço')}` : ''}">
+    return `<article class="fc-person-card fc-person-${gender}${focus ? ' is-focus' : ''}${former ? ' is-former' : ''}${isReference ? ' is-reference' : ''}${node.status === 'falecido' ? ' is-deceased' : ''}" data-person-id="${this.escape(id)}" title="${isReference ? `Origem: ${this.escape(node.sourceFamily || 'outro espaço')}` : ''}">
       <div class="fc-card-gender-band" aria-hidden="true"></div>
       ${avatar}
       <div class="fc-person-content">

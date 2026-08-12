@@ -5,12 +5,6 @@ require_once __DIR__ . '/../includes/functions.php';
 exigirFamilia();
 header('Content-Type: application/json; charset=utf-8');
 
-if (!usuarioPodeEditar()) {
-    http_response_code(403);
-    echo json_encode(['sucesso' => false, 'erro' => 'Seu papel neste espaço permite apenas visualização.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
 $payload = json_decode(file_get_contents('php://input'), true);
 if (!is_array($payload)) {
     http_response_code(400);
@@ -22,9 +16,15 @@ exigirCsrf($payload['csrf_token'] ?? null);
 $id = isset($payload['id']) ? (int) $payload['id'] : 0;
 $dados = is_array($payload['data'] ?? null) ? $payload['data'] : [];
 
-if ($id <= 0 || !buscarPessoa($id)) {
+$pessoa = $id > 0 ? buscarPessoa($id) : null;
+if (!$pessoa) {
     http_response_code(404);
     echo json_encode(['sucesso' => false, 'erro' => 'Pessoa não encontrada neste espaço familiar.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+if (!usuarioPodeEditarPessoa($id)) {
+    http_response_code(403);
+    echo json_encode(['sucesso' => false, 'erro' => 'Você não tem permissão para editar esta pessoa na família de origem.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

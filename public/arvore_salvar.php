@@ -4,21 +4,23 @@
  * (adicionar pessoa, editar nome/datas, desvincular parente) e sincroniza
  * com o banco. Nunca apaga pessoas — apenas cria/atualiza pessoas e
  * adiciona/remove relações (pai-filho e cônjuges), de forma aditiva e segura.
+ * Pessoas existentes são autorizadas pela família de origem; novas pessoas
+ * continuam restritas a editores do espaço ativo.
  */
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 exigirFamilia();
 header('Content-Type: application/json; charset=utf-8');
-if (!usuarioPodeEditar()) {
-    http_response_code(403);
-    echo json_encode(['sucesso' => false, 'erro' => 'Seu papel neste espaço permite apenas visualização.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
 
 $corpo = json_decode(file_get_contents('php://input'), true);
 if (!is_array($corpo) || !isset($corpo['data']) || !is_array($corpo['data'])) {
     http_response_code(400);
     echo json_encode(['sucesso' => false, 'erro' => 'Dados inválidos.']);
+    exit;
+}
+if (!validarCsrf($corpo['csrf_token'] ?? null)) {
+    http_response_code(419);
+    echo json_encode(['sucesso' => false, 'erro' => 'Sessão expirada. Recarregue a página e tente novamente.']);
     exit;
 }
 

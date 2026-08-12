@@ -20,7 +20,7 @@ $seguidas = $seguidasStmt->fetchAll();
     <title>Árvore · <?= htmlspecialchars($familiaNome) ?></title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="vendor/family-chart/family-chart.css?v=0.9.0">
-    <link rel="stylesheet" href="css/style.css?v=family-ref-2">
+    <link rel="stylesheet" href="css/style.css?v=community-1">
 </head>
 <body class="tree-page-body">
 <header class="topo tree-topbar">
@@ -34,7 +34,7 @@ $seguidas = $seguidasStmt->fetchAll();
     </nav>
 </header>
 
-<main class="heritage-explorer" data-csrf="<?= htmlspecialchars($csrf) ?>">
+<main class="heritage-explorer" data-csrf="<?= htmlspecialchars($csrf) ?>" data-space-editable="<?= usuarioPodeEditar() ? 'true' : 'false' ?>">
     <header class="explorer-breadcrumb">
         <div class="explorer-family-title">
             <span class="family-mark">⌘</span>
@@ -43,6 +43,7 @@ $seguidas = $seguidasStmt->fetchAll();
             <span data-breadcrumb-focus>Carregando pessoa em foco…</span>
         </div>
         <div class="explorer-header-actions">
+            <?php if (usuarioPodeEditar()): ?><button class="header-action" type="button" data-tree-action="reference" title="Incluir pessoa já cadastrada em outro espaço">＋ Incluir pessoa existente</button><?php endif; ?>
             <button class="header-action" type="button" data-tree-action="follow" title="Seguir outra árvore">＋ Seguir outra árvore</button>
             <button class="header-action" type="button" data-tree-action="import" title="Importar GEDCOM ou JSON">Importar</button>
             <button class="header-action" type="button" data-tree-action="export" title="Abrir versão pronta para salvar como PDF">Exportar PDF</button>
@@ -63,7 +64,7 @@ $seguidas = $seguidasStmt->fetchAll();
             <p class="sidebar-origin" data-person-origin hidden></p>
             <div class="sidebar-actions">
                 <a class="sidebar-action is-primary" data-person-profile href="index.php">Perfil</a>
-                <?php if (usuarioPodeEditar()): ?><button class="sidebar-action" type="button" data-tree-action="edit">Editar</button><?php endif; ?>
+                <button class="sidebar-action" type="button" data-tree-action="edit">Editar</button>
                 <button class="sidebar-action" type="button" data-tree-action="add">Adicionar</button>
                 <button class="sidebar-action" type="button" data-tree-action="more">Mais</button>
             </div>
@@ -154,10 +155,25 @@ $seguidas = $seguidasStmt->fetchAll();
     </form>
 </dialog>
 
+<dialog class="tree-dialog" id="reference-dialog">
+    <form method="post" action="familias.php" data-reference-form>
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
+        <input type="hidden" name="acao" value="referenciar_pessoa">
+        <input type="hidden" name="pessoa_id" value="" data-reference-person-id>
+        <div class="dialog-head"><div><span class="sidebar-kicker">Comunidade aberta</span><h2>Incluir pessoa existente</h2></div><button type="button" class="dialog-close" data-dialog-close>×</button></div>
+        <p class="muted">Encontre uma pessoa de outro espaço e inclua o mesmo registro nesta árvore. Se você puder editar a família de origem, a edição continuará disponível aqui.</p>
+        <label>Pesquisar por nome<input name="q" type="search" autocomplete="off" data-reference-search placeholder="Ex.: Pietra ou Samara"></label>
+        <div class="community-person-results" data-reference-results><p class="muted">Digite pelo menos dois caracteres para pesquisar.</p></div>
+        <p class="reference-selection" data-reference-selection hidden></p>
+        <div class="dialog-actions"><button type="button" class="btn btn-secundario" data-dialog-close>Cancelar</button><button class="btn" type="submit" data-reference-submit disabled>Incluir nesta árvore</button></div>
+        <p class="form-feedback" data-reference-feedback></p>
+    </form>
+</dialog>
+
 <script src="vendor/family-chart/d3.min.js?v=7.9.0"></script>
 <script src="vendor/family-chart/family-chart.min.js?v=0.9.0"></script>
-<script src="js/tree-view.js?v=family-ref-1"></script>
-<script src="js/tree-view-family-chart.js?v=family-ref-1"></script>
+<script src="js/tree-view.js?v=community-1"></script>
+<script src="js/tree-view-family-chart.js?v=community-1"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const tree = new FamilyTreeView({

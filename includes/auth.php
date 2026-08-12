@@ -86,12 +86,12 @@ function atualizarContextoFamilia(?int $familiaId = null): bool {
 
     $pdo = getConexao();
     $stmt = $pdo->prepare(
-        'SELECT f.id, f.nome, fu.papel
+        "SELECT f.id, f.nome, COALESCE(fu.papel, 'community') AS papel
          FROM familias f
-         JOIN familia_usuarios fu ON fu.familia_id = f.id
-         WHERE f.id = ? AND fu.usuario_id = ?'
+         LEFT JOIN familia_usuarios fu ON fu.familia_id = f.id AND fu.usuario_id = ?
+         WHERE f.id = ?"
     );
-    $stmt->execute([$familiaId, usuarioAtualId()]);
+    $stmt->execute([usuarioAtualId(), $familiaId]);
     $familia = $stmt->fetch();
     if (!$familia) {
         definirFamiliaAtual(null);
@@ -171,6 +171,23 @@ function listarFamiliasDoUsuario(?int $usuarioId = null): array {
          JOIN familia_usuarios fu ON fu.familia_id = f.id
          WHERE fu.usuario_id = ?
          ORDER BY f.nome'
+    );
+    $stmt->execute([$usuarioId]);
+    return $stmt->fetchAll();
+}
+
+function listarFamiliasDaComunidade(?int $usuarioId = null): array {
+    $usuarioId = $usuarioId ?: usuarioAtualId();
+    if (!$usuarioId) return [];
+    $pdo = getConexao();
+    $stmt = $pdo->prepare(
+        "SELECT f.id, f.nome, f.slug, f.descricao, f.criado_em,
+                COALESCE(fu.papel, 'community') AS papel,
+                (SELECT COUNT(*) FROM pessoas p WHERE p.familia_id = f.id) AS total_pessoas,
+                (SELECT COUNT(*) FROM familia_usuarios fu2 WHERE fu2.familia_id = f.id) AS total_membros
+         FROM familias f
+         LEFT JOIN familia_usuarios fu ON fu.familia_id = f.id AND fu.usuario_id = ?
+         ORDER BY CASE WHEN fu.usuario_id IS NULL THEN 1 ELSE 0 END, f.nome"
     );
     $stmt->execute([$usuarioId]);
     return $stmt->fetchAll();

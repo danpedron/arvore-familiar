@@ -35,6 +35,14 @@
       this.drag = null;
       this.panelOpen = true;
       this.data = null;
+      this.referenceDialog = document.querySelector('#reference-dialog');
+      this.referenceForm = document.querySelector('[data-reference-form]');
+      this.referenceSearch = document.querySelector('[data-reference-search]');
+      this.referenceResults = document.querySelector('[data-reference-results]');
+      this.referencePersonId = document.querySelector('[data-reference-person-id]');
+      this.referenceSelection = document.querySelector('[data-reference-selection]');
+      this.referenceSubmit = document.querySelector('[data-reference-submit]');
+      this.referenceFeedback = document.querySelector('[data-reference-feedback]');
       this.graph = null;
       this.modeValue = this.mode?.value || 'explorer';
       this.sortValue = this.sort?.value || 'nome_asc';
@@ -71,6 +79,7 @@
         button.addEventListener('click', () => button.closest('dialog')?.close());
       });
       document.querySelector('[data-follow-form]')?.addEventListener('submit', (event) => this.saveFollowedTree(event));
+      this.referenceSearch?.addEventListener('input', () => this.searchCommunityPeople());
     }
 
     async load() {
@@ -86,7 +95,7 @@
           birthPlace: person.localNascimento || '', photo: person.foto || '', status: person.status || 'vivo',
           parents: (person.pais || []).map(String), children: (person.filhos || []).map(String), spouses: (person.conjuges || []).map(String),
           unions: Array.isArray(person.unioes) ? person.unioes : [], updated: person.atualizadoEm || '', created: person.criadoEm || '',
-          readOnly: Boolean(person.somenteLeitura), sourceFamily: person.origemFamiliaNome || '',
+          editavel: Boolean(person.editavel), association: person.associacao || 'propria', sourceFamily: person.origemFamiliaNome || '',
         }));
         this.byId = new Map(this.nodes.map((node) => [node.id, node]));
         if (!this.nodes.length) return this.showEmpty();
@@ -116,6 +125,7 @@
       if (name === 'media') this.openProfileMedia();
       if (name === 'export') this.exportPdf();
       if (name === 'follow') document.querySelector('#follow-dialog')?.showModal();
+      if (name === 'reference') this.openReferenceDialog();
       if (name === 'import') this.openImporter();
     }
 
@@ -539,7 +549,7 @@
         const note = document.createElement('span'); note.className = 'tree-card-relation'; note.textContent = former ? 'Ex-união' : (id === this.focusId ? 'Em foco' : this.relationLabel(position.generation));
         content.append(name, dates, note); card.append(content);
         if (former) { const badge = document.createElement('span'); badge.className = 'tree-former-badge'; badge.textContent = 'ex'; card.append(badge); }
-        if (this.canEdit() && !node.readOnly) { const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'tree-card-edit'; edit.title = `Editar ${node.name}`; edit.textContent = '✎'; edit.addEventListener('click', (event) => { event.stopPropagation(); this.select(id); this.openEditPanel(); }); card.append(edit); }
+        if (node.editavel) { const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'tree-card-edit'; edit.title = `Editar ${node.name}`; edit.textContent = '✎'; edit.addEventListener('click', (event) => { event.stopPropagation(); this.select(id); this.openEditPanel(); }); card.append(edit); }
         card.addEventListener('click', () => this.select(id)); card.addEventListener('keydown', (event) => this.cardKeydown(event, node));
         this.cards.append(card);
       });
@@ -565,7 +575,7 @@
       const node = this.byId.get(this.focusId); if (!node) return;
       const parentSlots = Math.max(0, 2 - node.parents.length);
       const childSlots = Math.max(0, 1 - node.children.length);
-      if (!this.canEdit()) return;
+      if (!this.canEdit() || !node.editavel) return;
       for (let index = 0; index < parentSlots; index += 1) this.addSlot('Adicionar pai/mãe', 'pai_mae', this.positions.get(this.focusId), -1, index);
       for (let index = 0; index < childSlots; index += 1) this.addSlot('Adicionar filho', 'filho', this.positions.get(this.focusId), 1, index);
     }
@@ -584,9 +594,9 @@
     genderClass(gender) { if (gender === 'm' || gender === 'masculino') return 'male'; if (gender === 'f' || gender === 'feminino') return 'female'; return 'neutral'; }
     relationLabel(generation) { if (generation < 0) return `${Math.abs(generation)}ª geração acima`; if (generation > 0) return `${generation}ª geração abaixo`; return 'mesma geração'; }
     modeLabel() { return this.modeValue === 'fan' ? 'leque' : this.modeValue === 'lineage' ? 'linhagem' : 'explorador'; }
-    canEdit() { return document.body.dataset.canEdit !== 'false' && !!document.querySelector('[data-tree-action="edit"]'); }
+    canEdit() { return document.querySelector('.heritage-explorer')?.dataset.spaceEditable === 'true'; }
     focusedNode() { return this.byId.get(String(this.focusId)) || null; }
-    isFocusedEditable() { const node = this.focusedNode(); return !!node && !node.readOnly && this.canEdit(); }
+    isFocusedEditable() { const node = this.focusedNode(); return !!node && node.editavel; }
 
     unionBetween(a, b) {
       const node = this.byId.get(String(a)); if (!node) return null;
@@ -616,12 +626,25 @@
 
     updatePanel() {
       const node = this.byId.get(String(this.focusId)); if (!node || !this.panel) return;
-       const isReference = !!node.readOnly;
-       ['edit', 'add', 'media'].forEach((action) => { const element = this.panel.querySelector(`[data-tree-action="${action}"]`); if (element) { element.hidden = isReference; element.disabled = isReference; } });
+      const isReference = node.association === 'referenciada';
+      const canEditPerson = !!node.editavel;
+      const canCreateInCurrentSpace = this.canEdit() && canEditPerson;
+      [['edit', canEditPerson], ['add', canCreateInCurrentSpace], ['media', canEditPerson]].forEach(([action, allowed]) => {
+        const element = this.panel.querySelector(`[data-tree-action="${action}"]`);
+        if (element) { element.hidden = !allowed; element.disabled = !allowed; }
+      });
       const set = (selector, value) => { const element = this.panel.querySelector(selector); if (element) element.textContent = value; };
       set('[data-person-name]', node.name); set('[data-person-dates]', node.dates); set('[data-person-location]', node.birthPlace || 'Local de nascimento não informado');
       set('[data-person-relations]', `${node.parents.length} pais · ${node.spouses.length} cônjuges · ${node.children.length} filhos`);
-       const origin = this.panel.querySelector('[data-person-origin]'); if (origin) { origin.hidden = !isReference; origin.textContent = isReference ? `Referenciada de ${node.sourceFamily || 'outro espaço'} · somente leitura` : ''; }
+      const origin = this.panel.querySelector('[data-person-origin]');
+      if (origin) {
+        origin.hidden = !isReference;
+        origin.textContent = isReference
+          ? (canEditPerson
+            ? `Referenciada de ${node.sourceFamily || 'outro espaço'} · edição compartilhada com a origem`
+            : `Referenciada de ${node.sourceFamily || 'outro espaço'} · edição disponível no espaço de origem`)
+          : '';
+      }
       if (this.breadcrumb) this.breadcrumb.textContent = node.name;
       const profile = this.panel.querySelector('[data-person-profile]'); if (profile) profile.href = `pessoa.php?id=${encodeURIComponent(node.id)}`;
       const photo = this.panel.querySelector('[data-person-photo]'); if (photo) { photo.src = node.photo || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"%3E%3Crect width="120" height="120" fill="%23ecebe7"/%3E%3Ccircle cx="60" cy="43" r="23" fill="%23aaa9a3"/%3E%3Cpath d="M20 112c5-27 24-40 40-40s35 13 40 40" fill="%23aaa9a3"/%3E%3C/svg%3E'; photo.alt = `Foto de ${node.name}`; }
@@ -653,6 +676,48 @@
       const menu = document.createElement('div'); menu.className = 'sidebar-add-menu'; menu.innerHTML = `<strong>Adicionar relação</strong><a href="pessoa_editar.php?vincular_a=${encodeURIComponent(node.id)}&tipo_vinculo=pai_mae">＋ Pai ou mãe</a><a href="pessoa_editar.php?vincular_a=${encodeURIComponent(node.id)}&tipo_vinculo=filho">＋ Filho(a)</a><a href="pessoa_editar.php?vincular_a=${encodeURIComponent(node.id)}&tipo_vinculo=conjuge">＋ Cônjuge</a>`; this.panel.append(menu);
     }
     openMoreMenu() { const node = this.byId.get(String(this.focusId)); if (!node) return; const old = this.panel.querySelector('.sidebar-more-menu'); if (old) return old.remove(); const menu = document.createElement('div'); menu.className = 'sidebar-more-menu'; menu.innerHTML = `<a href="pessoa.php?id=${encodeURIComponent(node.id)}">Abrir página completa</a><button type="button" data-tree-action="center">Centralizar no canvas</button>`; menu.querySelector('button').addEventListener('click', () => { menu.remove(); this.centerFocus(); }); this.panel.append(menu); }
+    openReferenceDialog() {
+      if (!this.referenceDialog || !this.canEdit()) return;
+      this.referenceForm?.reset();
+      if (this.referencePersonId) this.referencePersonId.value = '';
+      if (this.referenceSelection) { this.referenceSelection.hidden = true; this.referenceSelection.textContent = ''; }
+      if (this.referenceSubmit) this.referenceSubmit.disabled = true;
+      if (this.referenceFeedback) { this.referenceFeedback.textContent = ''; this.referenceFeedback.className = 'form-feedback'; }
+      if (this.referenceResults) this.referenceResults.innerHTML = '<p class="muted">Digite pelo menos dois caracteres para pesquisar.</p>';
+      this.referenceDialog.showModal();
+      setTimeout(() => this.referenceSearch?.focus(), 0);
+    }
+    async searchCommunityPeople() {
+      if (!this.referenceResults || !this.referenceSearch) return;
+      const query = this.referenceSearch.value.trim();
+      if (query.length < 2) { this.referenceResults.innerHTML = '<p class="muted">Digite pelo menos dois caracteres para pesquisar.</p>'; return; }
+      this.referenceResults.innerHTML = '<p class="muted">Pesquisando…</p>';
+      try {
+        const response = await fetch(`pessoas_comunidade.php?q=${encodeURIComponent(query)}`, { credentials: 'same-origin', cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.sucesso) throw new Error(result.erro || 'Não foi possível pesquisar.');
+        this.referenceResults.replaceChildren();
+        if (!result.pessoas?.length) { this.referenceResults.innerHTML = '<p class="muted">Nenhuma pessoa encontrada em outro espaço.</p>'; return; }
+        result.pessoas.forEach((person) => {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'community-person-result'; button.dataset.personId = String(person.id);
+          const details = document.createElement('span'); const name = document.createElement('strong'); name.textContent = person.nome;
+          const family = document.createElement('small'); family.textContent = `Origem: ${person.familiaNome}`; details.append(name, family);
+          const permission = document.createElement('em'); permission.textContent = person.editavel ? 'Editável por você' : 'Edição na origem';
+          button.append(details, permission);
+          button.addEventListener('click', () => this.selectCommunityPerson(person, button));
+          this.referenceResults.append(button);
+        });
+      } catch (error) {
+        this.referenceResults.innerHTML = `<p class="form-feedback is-error">${this.escape(error.message)}</p>`;
+      }
+    }
+    selectCommunityPerson(person, button) {
+      if (this.referencePersonId) this.referencePersonId.value = String(person.id);
+      if (this.referenceSubmit) this.referenceSubmit.disabled = false;
+      this.referenceResults?.querySelectorAll('.community-person-result').forEach((item) => item.classList.toggle('is-selected', item === button));
+      if (this.referenceSelection) { this.referenceSelection.hidden = false; this.referenceSelection.textContent = `${person.nome} · origem: ${person.familiaNome}`; }
+    }
     openProfileMedia() { if (this.focusId && this.isFocusedEditable()) window.location.href = `pessoa.php?id=${encodeURIComponent(this.focusId)}#midias`; }
     exportPdf() { const params = new URLSearchParams({ foco: this.focusId || '', modo: this.modeValue, acima: this.ancestorRange?.value || '2', abaixo: this.descendantRange?.value || '2' }); window.open(`arvore_pdf.php?${params}`, '_blank', 'noopener'); }
     openImporter() { window.location.href = 'importar.php'; }

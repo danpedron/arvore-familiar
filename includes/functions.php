@@ -52,11 +52,25 @@ function exigirPessoaDaFamilia(int $pessoaId): array {
     return $pessoa;
 }
 
+function papelUsuarioNaFamilia(int $familiaId, ?int $usuarioId = null): string {
+    $usuarioId = $usuarioId ?: usuarioAtualId();
+    if (!$usuarioId) return 'community';
+    $stmt = getConexao()->prepare('SELECT papel FROM familia_usuarios WHERE familia_id = ? AND usuario_id = ? LIMIT 1');
+    $stmt->execute([$familiaId, $usuarioId]);
+    return (string) ($stmt->fetchColumn() ?: 'community');
+}
+
+function usuarioPodeEditarPessoa(int $pessoaId): bool {
+    $pessoa = exigirPessoaDaFamilia($pessoaId);
+    $familiaOrigemId = (int) ($pessoa['origem_familia_id'] ?? $pessoa['familia_id'] ?? 0);
+    return $familiaOrigemId > 0 && in_array(papelUsuarioNaFamilia($familiaOrigemId), ['owner', 'editor'], true);
+}
+
 function exigirPessoaEditavel(int $pessoaId): array {
     $pessoa = exigirPessoaDaFamilia($pessoaId);
-    if (($pessoa['associacao_tipo'] ?? 'propria') !== 'propria') {
-        $origem = $pessoa['origem_familia_nome'] ?? 'outro espaço familiar';
-        throw new RuntimeException('Esta pessoa é referenciada de ' . $origem . ' e está disponível somente para leitura.');
+    if (!usuarioPodeEditarPessoa($pessoaId)) {
+        $origem = $pessoa['origem_familia_nome'] ?? 'a família de origem';
+        throw new RuntimeException('Você pode consultar esta pessoa pela comunidade, mas não tem papel de edição em ' . $origem . '.');
     }
     return $pessoa;
 }
@@ -108,8 +122,7 @@ function atualizarCamposBasicos(int $id, array $campos): void {
     $pdo = getConexao();
     $set = implode(', ', array_map(fn($c) => "$c = :$c", array_keys($campos)));
     $campos['id'] = $id;
-    $campos['familia_id'] = contextoFamiliaId();
-    $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id AND familia_id = :familia_id")->execute($campos);
+    $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id")->execute($campos);
     registrarAuditoria('pessoa', $id, 'atualizacao_basica', ['campos' => array_keys($campos)]);
 }
 
@@ -117,6 +130,9 @@ function atualizarCamposBasicos(int $id, array $campos): void {
 // direto pela árvore visual — os demais campos ficam vazios e podem ser
 // completados depois na tela de edição normal).
 function criarPessoaBasica(array $campos): int {
+    if (!usuarioPodeEditar()) {
+        throw new RuntimeException('Você precisa ser editor ou responsável pelo espaço atual para criar uma pessoa.');
+    }
     $pdo = getConexao();
     $dados = [
         'familia_id' => contextoFamiliaId(),
@@ -201,9 +217,8 @@ function salvarPessoa(array $dados, ?int $id = null): int {
     if ($id) {
         exigirPessoaEditavel($id);
         $set = implode(', ', array_map(fn($c) => "$c = :$c", array_keys($campos)));
-        $stmt = $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id AND familia_id = :familia_id");
+        $stmt = $pdo->prepare("UPDATE pessoas SET $set WHERE id = :id");
         $campos['id'] = $id;
-        $campos['familia_id'] = contextoFamiliaId();
         $stmt->execute($campos);
         registrarAuditoria('pessoa', $id, 'atualizacao', ['nome' => $campos['nome_completo']]);
         return $id;
@@ -222,18 +237,21 @@ function salvarPessoa(array $dados, ?int $id = null): int {
 }
 
 function excluirPessoa(int $id): void {
-    exigirPessoaEditavel($id);
+    $pessoa = exigirPessoaEditavel($id);
+    if ((int) ($pessoa['familia_id'] ?? 0) !== contextoFamiliaId()) {
+        throw new RuntimeException('Uma pessoa referenciada não pode ser excluída deste espaço. Remova-a na família de origem.');
+    }
     $pdo = getConexao();
-    $stmt = $pdo->prepare('DELETE FROM pessoas WHERE id = ? AND familia_id = ?');
-    $stmt->execute([$id, contextoFamiliaId()]);
+    $stmt = $pdo->prepare('DELETE FROM pessoas WHERE id = ?');
+    $stmt->execute([$id]);
     registrarAuditoria('pessoa', $id, 'exclusao');
 }
 
 function atualizarFotoPerfil(int $pessoaId, string $caminho): void {
     exigirPessoaEditavel($pessoaId);
     $pdo = getConexao();
-    $stmt = $pdo->prepare('UPDATE pessoas SET foto_perfil = ? WHERE id = ? AND familia_id = ?');
-    $stmt->execute([$caminho, $pessoaId, contextoFamiliaId()]);
+    $stmt = $pdo->prepare('UPDATE pessoas SET foto_perfil = ? WHERE id = ?');
+    $stmt->execute([$caminho, $pessoaId]);
     registrarAuditoria('pessoa', $pessoaId, 'foto_atualizada');
 }
 
@@ -253,9 +271,8 @@ function removerPaiMae(int $filhoId, int $paiMaeId): void {
     exigirPessoaEditavel($filhoId);
     exigirPessoaEditavel($paiMaeId);
     $pdo = getConexao();
-    $familiaId = contextoFamiliaId();
-    $stmt = $pdo->prepare('DELETE FROM relacoes_parentais WHERE filho_id = ? AND pai_mae_id = ? AND EXISTS (SELECT 1 FROM pessoas p WHERE p.id = relacoes_parentais.filho_id AND p.familia_id = ?) AND EXISTS (SELECT 1 FROM pessoas p2 WHERE p2.id = relacoes_parentais.pai_mae_id AND p2.familia_id = ?)');
-    $stmt->execute([$filhoId, $paiMaeId, $familiaId, $familiaId]);
+    $stmt = $pdo->prepare('DELETE FROM relacoes_parentais WHERE filho_id = ? AND pai_mae_id = ?');
+    $stmt->execute([$filhoId, $paiMaeId]);
 }
 
 function listarPais(int $pessoaId): array {
