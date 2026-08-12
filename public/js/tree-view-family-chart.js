@@ -16,7 +16,12 @@
   const legacyMovePan = BaseTreeView.prototype.movePan;
   const legacyEndPan = BaseTreeView.prototype.endPan;
 
-  const CARD = { width: 242, height: 120 };
+  const CARD_DESKTOP = { width: 300, height: 140 };
+  const CARD_MOBILE = { width: 250, height: 122 };
+
+  function familyChartCardDimensions() {
+    return window.innerWidth <= 900 ? CARD_MOBILE : CARD_DESKTOP;
+  }
 
   BaseTreeView.prototype.familyChartData = function familyChartData() {
     const focusedId = String(this.focusId || '');
@@ -73,7 +78,10 @@
     const referenceBadge = isReference
       ? `<b class="fc-reference-badge" title="Pessoa referenciada de ${this.escape(node.sourceFamily || 'outro espaço')}">referenciada</b>`
       : '';
-    return `<article class="fc-person-card fc-person-${gender}${focus ? ' is-focus' : ''}${former ? ' is-former' : ''}${isReference ? ' is-reference' : ''}${node.status === 'falecido' ? ' is-deceased' : ''}" data-person-id="${this.escape(id)}" title="${isReference ? `Origem: ${this.escape(node.sourceFamily || 'outro espaço')}` : ''}">
+    const cardTitle = isReference
+      ? `${node.name} — origem: ${node.sourceFamily || 'outro espaço'}`
+      : node.name;
+    return `<article class="fc-person-card fc-person-${gender}${focus ? ' is-focus' : ''}${former ? ' is-former' : ''}${isReference ? ' is-reference' : ''}${node.status === 'falecido' ? ' is-deceased' : ''}" data-person-id="${this.escape(id)}" title="${this.escape(cardTitle)}" aria-label="${this.escape(node.name)}">
       <div class="fc-card-gender-band" aria-hidden="true"></div>
       ${avatar}
       <div class="fc-person-content">
@@ -113,9 +121,10 @@
     const focusScale = maximumDepth >= 5 ? 0.72 : (maximumDepth >= 4 ? 0.8 : (maximumDepth >= 3 ? 0.9 : 1));
     const chart = window.f3.createChart(this.stage, this.familyChartData());
     const card = chart.setCardHtml();
+    const cardDimensions = familyChartCardDimensions();
     const view = this;
     card
-      .setCardDim({ width: CARD.width, height: CARD.height })
+      .setCardDim({ width: cardDimensions.width, height: cardDimensions.height })
       .setCardInnerHtmlCreator((datum) => view.familyCardHtml(datum))
       .setOnCardClick((event, datum) => {
         const edit = event.target.closest?.('[data-family-edit]');
@@ -138,8 +147,8 @@
     chart
       .setTransitionTime(260)
       .setOrientationVertical()
-      .setCardXSpacing(292)
-      .setCardYSpacing(this.modeValue === 'fan' ? 292 : 250)
+      .setCardXSpacing(cardDimensions.width + 50)
+      .setCardYSpacing(this.modeValue === 'fan' ? cardDimensions.height + 150 : cardDimensions.height + 130)
       .setAncestryDepth(ancestry)
       .setProgenyDepth(progeny)
       .setShowSiblingsOfMain(this.modeValue === 'explorer')

@@ -437,8 +437,8 @@ body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:v
 .tree-stage-family-chart svg .link.spouse, .tree-stage-family-chart svg .link-spouse { stroke:#c6a06a; stroke-width:2.8px; }
 .tree-stage-family-chart .card_cont { overflow:visible !important; }
 .tree-stage-family-chart .card { overflow:visible; background:transparent; box-shadow:none; cursor:pointer; }
-.tree-stage-family-chart .card-inner { position:relative; width:242px; height:120px; }
-.fc-person-card { --fc-accent:#879399; position:relative; display:flex; align-items:center; gap:12px; width:242px; height:120px; overflow:hidden; box-sizing:border-box; padding:18px 27px 13px 13px; border:1px solid #d2d9da; border-radius:10px; background:#fff; box-shadow:0 3px 11px rgba(48,57,61,.16); color:#283236; text-align:left; transition:box-shadow .16s ease, transform .16s ease, border-color .16s ease; }
+.tree-stage-family-chart .card-inner { position:relative; width:300px; height:140px; }
+.fc-person-card { --fc-accent:#879399; position:relative; display:flex; align-items:center; gap:14px; width:300px; height:140px; overflow:hidden; box-sizing:border-box; padding:18px 30px 15px 14px; border:1px solid #d2d9da; border-radius:10px; background:#fff; box-shadow:0 3px 11px rgba(48,57,61,.16); color:#283236; text-align:left; transition:box-shadow .16s ease, transform .16s ease, border-color .16s ease; }
 .fc-person-card:hover { z-index:6; box-shadow:0 10px 24px rgba(48,57,61,.23); transform:translateY(-2px); }
 .fc-person-male { --fc-accent:#269bab; border-color:#a8d7dd; }
 .fc-person-female { --fc-accent:#d8788a; border-color:#efb4be; }
@@ -447,13 +447,13 @@ body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:v
 .fc-person-card.is-focus { border-color:var(--fc-accent); box-shadow:0 0 0 5px color-mix(in srgb,var(--fc-accent) 19%,transparent),0 8px 22px rgba(48,57,61,.24); }
 .fc-person-card.is-former { border-style:dashed; background:#fffdfb; }
 .fc-person-card.is-deceased { background:#fbfcfc; }
-.fc-person-avatar { flex:0 0 auto; width:58px; height:58px; border:2px solid #fff; border-radius:50%; object-fit:cover; background:#e5e9e9; box-shadow:0 1px 5px rgba(32,42,45,.2); }
+.fc-person-avatar { flex:0 0 auto; width:66px; height:66px; border:2px solid #fff; border-radius:50%; object-fit:cover; background:#e5e9e9; box-shadow:0 1px 5px rgba(32,42,45,.2); }
 .fc-person-initials { display:grid; place-items:center; color:#fff; background:#96a2a5; font-size:23px; font-weight:800; }
 .fc-person-male .fc-person-initials { background:#54aab5; }
 .fc-person-female .fc-person-initials { background:#d68696; }
 .fc-person-card.is-deceased .fc-person-avatar { filter:grayscale(.58); }
-.fc-person-content { min-width:0; }
-.fc-person-content h3 { display:-webkit-box; overflow:hidden; margin:0; color:#263135; font-size:13px; font-weight:800; line-height:1.2; text-overflow:ellipsis; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.fc-person-content { flex:1 1 auto; min-width:0; }
+.fc-person-content h3 { display:-webkit-box; overflow:hidden; margin:0; color:#263135; font-size:13.5px; font-weight:800; line-height:1.22; text-overflow:ellipsis; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
 .fc-person-content p { margin:6px 0 0; overflow:hidden; color:#556369; font-size:11px; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:.01em; text-overflow:ellipsis; white-space:nowrap; }
 .fc-person-content span { display:inline-flex; max-width:100%; margin-top:7px; overflow:hidden; border-radius:999px; padding:3px 6px; background:#f1f4f4; color:#6f7b80; font-size:9px; font-weight:800; line-height:1; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
 .fc-person-card.is-focus .fc-person-content span { background:#e3f3f4; color:#1c7884; }
@@ -463,11 +463,11 @@ body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:v
 .fc-former-badge { position:absolute; right:7px; top:10px; display:grid; place-items:center; width:22px; height:22px; border:2px solid #fff; border-radius:50%; background:#fff0e6; color:#ad6532; box-shadow:0 1px 3px rgba(0,0,0,.12); font-size:9px; font-weight:900; text-transform:uppercase; }
 .tree-stage-family-chart .card_cont .card-main-outline { stroke:transparent; }
 .tree-stage-family-chart .f3-path-to-main { filter:drop-shadow(0 0 3px rgba(38,155,171,.45)); }
-@media (max-width:900px) { .fc-person-card { width:214px; height:108px; padding-right:24px; } .tree-stage-family-chart .card-inner { width:214px; height:108px; } .fc-person-avatar { width:50px; height:50px; } }
+@media (max-width:900px) { .fc-person-card { width:250px; height:122px; gap:11px; padding:16px 25px 13px 12px; } .tree-stage-family-chart .card-inner { width:250px; height:122px; } .fc-person-avatar { width:54px; height:54px; } .fc-person-content h3 { font-size:12.5px; -webkit-line-clamp:3; } .fc-reference-badge { right:31px; } }
 @media print { .tree-stage-family-chart { position:relative; height:900px; overflow:visible; } .tree-stage-family-chart.f3.f3-cont { height:900px; } }
 
 /* Referências entre espaços familiares */
-.family-reference-list{display:grid;gap:8px}.family-reference-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)}.family-reference-row form{margin:0}.fc-reference-badge{display:inline-flex;align-items:center;white-space:nowrap;padding:4px 7px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:9px;line-height:1;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.fc-person-card.is-reference{border-style:dashed}.fc-person-card.is-reference .fc-card-gender-band{background:linear-gradient(90deg,#6366f1,#a78bfa)}
+.family-reference-list{display:grid;gap:8px}.family-reference-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)}.family-reference-row form{margin:0}.fc-reference-badge{position:absolute;top:10px;right:36px;display:inline-flex;align-items:center;white-space:nowrap;padding:4px 7px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:9px;line-height:1;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.fc-person-card.is-reference{border-style:dashed}.fc-person-card.is-reference .fc-card-gender-band{background:linear-gradient(90deg,#6366f1,#a78bfa)}
 @media (max-width:700px){.family-reference-row{align-items:flex-start;flex-direction:column}.family-reference-row form{width:100%}.family-reference-row .btn{width:100%}}
 
 .sidebar-origin{margin:0 18px 14px;padding:9px 11px;border:1px dashed #818cf8;border-radius:10px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:700;line-height:1.35}.sidebar-origin[hidden]{display:none}
