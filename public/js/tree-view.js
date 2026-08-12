@@ -2,7 +2,10 @@
   'use strict';
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
-  const CARD = { width: 204, height: 86, gapX: 28, gapY: 116 };
+  const CARD = { width: 204, height: 86, gapX: 72, gapY: 250 };
+  const UNION_GAP = 26;
+  const BRANCH_GAP = 150;
+  const ROW_GAP = 250;
   const END_STATUSES = new Set(['divorciado', 'encerrado', 'viuvo']);
 
   class FamilyTreeView {
@@ -86,7 +89,10 @@
         }));
         this.byId = new Map(this.nodes.map((node) => [node.id, node]));
         if (!this.nodes.length) return this.showEmpty();
-        if (!this.focusId || !this.byId.has(this.focusId)) this.focusId = this.nodes[0].id;
+        const preferredPersonId = this.data.usuario?.pessoaId ? String(this.data.usuario.pessoaId) : null;
+        if (!this.focusId || !this.byId.has(this.focusId)) {
+          this.focusId = preferredPersonId && this.byId.has(preferredPersonId) ? preferredPersonId : this.nodes[0].id;
+        }
         this.hideEmpty();
         this.render({ center: true });
         const total = this.data.totais?.pessoas || this.nodes.length;
@@ -165,10 +171,65 @@
       include.forEach((id) => {
         const node = this.byId.get(id);
         if (!node) return;
-        node.parents.forEach((pid) => { if (generation.has(id) && generation.get(id) < 0 && !generation.has(pid)) generation.set(pid, generation.get(id) - 1); });
+        node.parents.forEach((pid) => {
+          if (generation.has(id) && generation.get(id) < 0 && !generation.has(pid)) {
+            generation.set(pid, generation.get(id) - 1);
+          }
+        });
       });
       this.visibleIds = include;
-      return { generation, ancestors, descendants };
+      const familyGroups = this.buildFamilyGroups(generation);
+      return { generation, ancestors, descendants, ...familyGroups };
+    }
+
+    buildFamilyGroups(generation) {
+      const groupsById = new Map();
+      const groupByPerson = new Map();
+      const used = new Set();
+      let groupNumber = 0;
+      const order = [...this.visibleIds].sort((a, b) => {
+        const level = (generation.get(a) || 0) - (generation.get(b) || 0);
+        return level || this.byId.get(a).name.localeCompare(this.byId.get(b).name, 'pt-BR');
+      });
+      order.forEach((id) => {
+        if (used.has(id)) return;
+        const members = new Set([id]);
+        const pending = [id];
+        while (pending.length) {
+          const current = pending.pop();
+          const person = this.byId.get(current);
+          (person?.spouses || []).forEach((spouseId) => {
+            spouseId = String(spouseId);
+            if (!this.visibleIds.has(spouseId) || members.has(spouseId)) return;
+            members.add(spouseId);
+            pending.push(spouseId);
+          });
+        }
+        const sortedMembers = this.sorted([...members]);
+        const groupId = `family-${groupNumber += 1}`;
+        const group = {
+          id: groupId,
+          members: sortedMembers,
+          generation: Math.min(...sortedMembers.map((memberId) => generation.get(memberId) ?? 0)),
+          children: new Set(),
+          parents: new Set(),
+        };
+        groupsById.set(groupId, group);
+        sortedMembers.forEach((memberId) => { used.add(memberId); groupByPerson.set(memberId, groupId); });
+      });
+      groupsById.forEach((group) => {
+        group.members.forEach((memberId) => {
+          const person = this.byId.get(memberId);
+          (person?.children || []).forEach((childId) => {
+            childId = String(childId);
+            const childGroupId = groupByPerson.get(childId);
+            if (!childGroupId || childGroupId === group.id) return;
+            group.children.add(childGroupId);
+            groupsById.get(childGroupId)?.parents.add(group.id);
+          });
+        });
+      });
+      return { groupsById, groupByPerson };
     }
 
     addGraphNode(id, level, include, generation, queue) {
@@ -196,45 +257,84 @@
     layoutGraph(graph) {
       const positions = new Map();
       if (this.modeValue === 'fan') return this.layoutFan(graph, positions);
-      const rows = new Map();
-      this.visibleIds.forEach((id) => {
-        const level = graph.generation.get(id) ?? 0;
-        if (!rows.has(level)) rows.set(level, []);
-        rows.get(level).push(id);
-      });
-      const levels = [...rows.keys()].sort((a, b) => a - b);
-      if (this.modeValue === 'lineage') {
-        levels.forEach((level, column) => {
-          const ids = this.sorted(rows.get(level));
-          ids.forEach((id, row) => positions.set(id, { x: column * 270 + 50, y: row * (CARD.height + 24) + 50, generation: level }));
-        });
-      } else {
-        levels.forEach((level, rowIndex) => {
-          const ids = this.sorted(rows.get(level));
-          const grouped = this.groupCouples(ids);
-          let x = 40;
-          grouped.forEach((group) => {
-            group.forEach((id) => { positions.set(id, { x, y: rowIndex * CARD.gapY + 50, generation: level }); x += CARD.width + CARD.gapX; });
-            x += 22;
-          });
-        });
-      }
-      this.normalizePositions(positions);
-      return positions;
+      return this.layoutHierarchical(graph, positions);
     }
 
-    groupCouples(ids) {
-      const left = new Set(ids);
-      const groups = [];
-      this.sorted(ids).forEach((id) => {
-        if (!left.has(id)) return;
-        left.delete(id);
-        const node = this.byId.get(id);
-        const spouse = this.sorted(node.spouses.filter((sid) => left.has(sid) && this.visibleIds.has(sid)))[0];
-        if (spouse) { left.delete(spouse); groups.push([id, spouse]); }
-        else groups.push([id]);
+    layoutHierarchical(graph, positions) {
+      const baseGroupId = graph.groupByPerson.get(String(this.focusId));
+      if (!baseGroupId || !graph.groupsById.has(baseGroupId)) return positions;
+      const groupWidth = (groupId) => {
+        const group = graph.groupsById.get(groupId);
+        return group ? group.members.length * CARD.width + Math.max(0, group.members.length - 1) * UNION_GAP : CARD.width;
+      };
+      const ordered = (ids) => [...ids].sort((a, b) => {
+        const left = graph.groupsById.get(a); const right = graph.groupsById.get(b);
+        const leftName = left?.members.map((id) => this.byId.get(id)?.name || '').join(' ') || '';
+        const rightName = right?.members.map((id) => this.byId.get(id)?.name || '').join(' ') || '';
+        return leftName.localeCompare(rightName, 'pt-BR');
       });
-      return groups;
+      const memoDown = new Map();
+      const memoUp = new Map();
+      const measure = (groupId, direction, path = new Set()) => {
+        const memo = direction > 0 ? memoDown : memoUp;
+        if (memo.has(groupId)) return memo.get(groupId);
+        if (path.has(groupId)) return groupWidth(groupId);
+        const nextPath = new Set(path).add(groupId);
+        const group = graph.groupsById.get(groupId);
+        const linked = ordered(direction > 0 ? group?.children || [] : group?.parents || []);
+        const linkedWidth = linked.reduce((total, childId) => total + measure(childId, direction, nextPath), 0) + Math.max(0, linked.length - 1) * BRANCH_GAP;
+        const result = Math.max(groupWidth(groupId), linkedWidth || 0);
+        memo.set(groupId, result);
+        return result;
+      };
+      const placedGroups = new Set();
+      const placeGroup = (groupId, left, y) => {
+        if (placedGroups.has(groupId)) return;
+        const group = graph.groupsById.get(groupId); if (!group) return;
+        placedGroups.add(groupId);
+        const width = groupWidth(groupId);
+        group.members.forEach((id, index) => {
+          positions.set(id, { x: left + index * (CARD.width + UNION_GAP), y, generation: graph.generation.get(id) ?? group.generation });
+        });
+        group._renderWidth = width;
+      };
+      const placeDown = (groupId, left, y) => {
+        const group = graph.groupsById.get(groupId); if (!group) return;
+        const linked = ordered(group.children);
+        const total = linked.reduce((sum, childId) => sum + measure(childId, 1), 0) + Math.max(0, linked.length - 1) * BRANCH_GAP;
+        let cursor = left + Math.max(0, (measure(groupId, 1) - total) / 2);
+        linked.forEach((childId) => {
+          const childWidth = measure(childId, 1);
+          const childGroupWidth = groupWidth(childId);
+          placeGroup(childId, cursor + (childWidth - childGroupWidth) / 2, y + ROW_GAP);
+          placeDown(childId, cursor, y + ROW_GAP);
+          cursor += childWidth + BRANCH_GAP;
+        });
+      };
+      const placeUp = (groupId, left, y) => {
+        const group = graph.groupsById.get(groupId); if (!group) return;
+        const linked = ordered(group.parents);
+        const total = linked.reduce((sum, parentId) => sum + measure(parentId, -1), 0) + Math.max(0, linked.length - 1) * BRANCH_GAP;
+        let cursor = left + Math.max(0, (measure(groupId, -1) - total) / 2);
+        linked.forEach((parentId) => {
+          const parentWidth = measure(parentId, -1);
+          const parentGroupWidth = groupWidth(parentId);
+          placeGroup(parentId, cursor + (parentWidth - parentGroupWidth) / 2, y - ROW_GAP);
+          placeUp(parentId, cursor, y - ROW_GAP);
+          cursor += parentWidth + BRANCH_GAP;
+        });
+      };
+      const downWidth = measure(baseGroupId, 1);
+      const upWidth = measure(baseGroupId, -1);
+      const canvasWidth = Math.max(downWidth, upWidth);
+      const centerX = Math.max(820, canvasWidth / 2 + 260);
+      const baseY = Math.max(280, (graph.ancestors + 1) * ROW_GAP);
+      const baseWidth = groupWidth(baseGroupId);
+      placeGroup(baseGroupId, centerX - baseWidth / 2, baseY);
+      placeDown(baseGroupId, centerX - downWidth / 2, baseY);
+      placeUp(baseGroupId, centerX - upWidth / 2, baseY);
+      this.normalizePositions(positions);
+      return positions;
     }
 
     layoutFan(graph, positions) {
@@ -284,15 +384,25 @@
       const unionLayer = document.createElementNS(SVG_NS, 'g'); unionLayer.classList.add('tree-union-layer');
       this.links.append(parentLayer, unionLayer);
       const drawn = new Set();
+      const groupCenter = (groupId) => {
+        const group = this.graph.groupsById.get(groupId); if (!group) return null;
+        const members = group.members.map((id) => this.positions.get(id)).filter(Boolean); if (!members.length) return null;
+        const left = Math.min(...members.map((position) => position.x));
+        const right = Math.max(...members.map((position) => position.x + CARD.width));
+        const top = Math.min(...members.map((position) => position.y));
+        const bottom = Math.max(...members.map((position) => position.y + CARD.height));
+        return { x: (left + right) / 2, top, bottom };
+      };
+      this.graph.groupsById.forEach((group) => {
+        group.children.forEach((childGroupId) => {
+          const parent = groupCenter(group.id); const child = groupCenter(childGroupId); if (!parent || !child) return;
+          const key = `${group.id}:${childGroupId}`; if (drawn.has(key)) return; drawn.add(key);
+          const middle = parent.bottom + (child.top - parent.bottom) / 2;
+          parentLayer.append(this.path(`M ${parent.x} ${parent.bottom} V ${middle} H ${child.x} V ${child.top}`, 'tree-link tree-link-parent tree-link-family'));
+        });
+      });
       this.visibleIds.forEach((id) => {
         const node = this.byId.get(id); const from = this.positions.get(id); if (!node || !from) return;
-        node.children.forEach((childId) => {
-          const to = this.positions.get(childId); if (!to) return;
-          const key = `${id}:${childId}`; if (drawn.has(key)) return; drawn.add(key);
-          const x1 = from.x + CARD.width / 2; const y1 = from.y + CARD.height; const x2 = to.x + CARD.width / 2; const y2 = to.y;
-          const middle = y1 + (y2 - y1) / 2;
-          parentLayer.append(this.path(`M ${x1} ${y1} V ${middle} H ${x2} V ${y2}`, 'tree-link tree-link-parent'));
-        });
         node.spouses.forEach((spouseId) => {
           const to = this.positions.get(spouseId); if (!to) return;
           const key = [id, spouseId].sort().join(':'); if (drawn.has(`union:${key}`)) return; drawn.add(`union:${key}`);

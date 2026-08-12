@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($acao === 'selecionar') {
             $id = (int) ($_POST['familia_id'] ?? 0);
             if (!atualizarContextoFamilia($id)) throw new RuntimeException('Você não tem acesso a esse espaço.');
-            header('Location: index.php');
+            header('Location: arvore.php');
             exit;
         }
         if ($acao === 'criar') {

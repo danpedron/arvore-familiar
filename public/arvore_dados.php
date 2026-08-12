@@ -113,6 +113,33 @@ foreach ($pessoas as $person) {
 $familyStmt = $pdo->prepare('SELECT id, nome, slug, descricao FROM familias WHERE id = ?');
 $familyStmt->execute([$familiaId]);
 
+$currentUserId = usuarioAtualId();
+$userPersonId = null;
+if ($currentUserId) {
+    $focusStmt = $pdo->prepare(
+        'SELECT p.id
+         FROM pessoas p
+         INNER JOIN usuarios u ON u.id = ?
+         WHERE p.familia_id = ?
+           AND LOWER(TRIM(p.nome_completo)) = LOWER(TRIM(u.nome))
+         ORDER BY p.id
+         LIMIT 1'
+    );
+    $focusStmt->execute([$currentUserId, $familiaId]);
+    $userPersonId = $focusStmt->fetchColumn();
+    if ($userPersonId === false) {
+        $candidateStmt = $pdo->prepare(
+            'SELECT MIN(id), COUNT(*)
+             FROM pessoas
+             WHERE familia_id = ? AND criado_por = ?'
+        );
+        $candidateStmt->execute([$familiaId, $currentUserId]);
+        [$candidateId, $candidateCount] = $candidateStmt->fetch(PDO::FETCH_NUM) ?: [null, 0];
+        $userPersonId = ((int) $candidateCount === 1) ? $candidateId : null;
+    }
+    $userPersonId = $userPersonId !== null ? (string) $userPersonId : null;
+}
+
 $totalPeople = count($pessoas);
 $alive = count(array_filter($pessoas, static fn(array $person): bool => empty($person['falecido'])));
 
@@ -127,5 +154,9 @@ echo json_encode([
         'unioes' => count($unionRows),
     ],
     'pessoas' => $output,
+    'usuario' => [
+        'id' => $currentUserId ? (string) $currentUserId : null,
+        'pessoaId' => $userPersonId,
+    ],
     'geradoEm' => date(DATE_ATOM),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

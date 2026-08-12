@@ -421,3 +421,8 @@ body.tree-page-body { background:var(--explorer-bg); color:var(--explorer-ink); 
 .dialog-close { border:0; background:transparent; color:#858d90; cursor:pointer; font-size:24px; }
 @media (max-width: 900px) { .explorer-breadcrumb { padding:0 14px; } .explorer-header-actions .header-action:nth-child(2) { display:none; } .explorer-layout { grid-template-columns:270px minmax(0,1fr); } .heritage-sidebar { width:270px; } .tree-panel-closed .heritage-sidebar { margin-left:-270px; } .explorer-toolbar { flex-wrap:wrap; } .explorer-search { order:-1; max-width:none; flex-basis:100%; } .toolbar-select { font-size:9px; } }
 @media print { .tree-topbar,.explorer-breadcrumb,.explorer-toolbar,.heritage-sidebar,.explorer-footer,.canvas-hint { display:none !important; } .heritage-explorer,.explorer-layout,.explorer-workspace,.explorer-canvas { min-height:0; height:auto; display:block; overflow:visible; } .explorer-canvas { background:#fff; } .tree-stage { position:relative; transform:none !important; } .tree-world { transform:none !important; } }
+.tree-link-family { stroke: #7fa9ac; stroke-width: 3.4; }
+.tree-link-parent { stroke: #7fa9ac; stroke-width: 3.2; }
+.tree-world { min-width: 100%; min-height: 100%; }
+.tree-card { box-shadow: 0 3px 8px rgba(48,57,61,.14); }
+.tree-card.is-focus { box-shadow: 0 0 0 5px rgba(45,156,171,.15), 0 6px 18px rgba(48,57,61,.22); }

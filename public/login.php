@@ -5,7 +5,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $senha = $_POST['senha'] ?? '';
     if (autenticarUsuario($email, $senha)) {
-        header('Location: ' . (familiaAtualId() ? 'index.php' : 'familias.php'));
+        header('Location: ' . (familiaAtualId() ? 'arvore.php' : 'familias.php'));
         exit;
     }
     $erro = 'E-mail ou senha incorretos.';
