@@ -102,6 +102,8 @@
 
     const ancestry = Math.max(1, Number(this.ancestorRange?.value || 2));
     const progeny = Math.max(1, Number(this.descendantRange?.value || 2));
+    const maximumDepth = Math.max(ancestry, progeny);
+    const focusScale = maximumDepth >= 5 ? 0.72 : (maximumDepth >= 4 ? 0.8 : (maximumDepth >= 3 ? 0.9 : 1));
     const chart = window.f3.createChart(this.stage, this.familyChartData());
     const card = chart.setCardHtml();
     const view = this;
@@ -151,8 +153,9 @@
     this.familyChart = chart;
     chart.updateMainId(String(this.focusId));
     chart.updateTree({
-      initial: true,
+      initial: false,
       tree_position: 'main_to_middle',
+      scale: focusScale,
       transition_time: 0,
     });
     this.updatePanel();
