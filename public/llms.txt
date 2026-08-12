@@ -1,0 +1,26 @@
+# Árvore Familiar
+
+> Plataforma comunitária em português do Brasil para construir, preservar e explorar árvores genealógicas.
+
+## Conteúdo público
+
+- [Página inicial](https://arvore.pedron.com.br/): proposta, recursos e início do cadastro.
+- [Sobre o projeto](https://arvore.pedron.com.br/sobre.php): funcionamento da genealogia colaborativa, referências entre espaços e perguntas frequentes.
+- [Guia para começar uma árvore](https://arvore.pedron.com.br/guia-arvore-genealogica.php): roteiro prático para reunir memórias, documentos e relações familiares.
+- [Criar conta](https://arvore.pedron.com.br/registro.php): cadastro de novos usuários.
+
+## O que a plataforma oferece
+
+A Árvore Familiar permite registrar pessoas, relações entre gerações, datas, locais, fotos e documentos; explorar a árvore com navegação visual; importar dados GEDCOM ou JSON; e referenciar pessoas existentes em outros espaços familiares para reduzir duplicações.
+
+## Modelo comunitário
+
+Os espaços familiares podem descobrir e visualizar outros espaços da comunidade. Quando uma pessoa é referenciada, o contexto genealógico conectado por relações biológicas ou adotivas pode acompanhar a referência. A origem do registro continua indicada.
+
+## Privacidade e rastreamento
+
+Este arquivo descreve somente o conteúdo institucional público. Árvores, perfis, documentos e APIs autenticadas não fazem parte do conteúdo público deste índice e não devem ser inferidos ou reproduzidos sem autorização.
+
+## Fonte do projeto
+
+- [Repositório no GitHub](https://github.com/danpedron/arvore-familiar)

@@ -1,5 +1,11 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+
+if (!usuarioLogado()) {
+    require __DIR__ . '/inicio.php';
+    exit;
+}
+
 require_once __DIR__ . '/../includes/functions.php';
 exigirFamilia();
 
@@ -121,6 +127,7 @@ $recentes = $stmt->fetchAll();
                 <p>Use os atalhos para explorar ou ampliar o acervo.</p>
                 <a class="quick-link" href="arvore.php">Abrir explorador <span>→</span></a>
                 <a class="quick-link" href="pessoa_editar.php">Registrar pessoa <span>→</span></a>
+                <a class="quick-link" href="familias.php#convite-titulo">Convidar familiares <span>→</span></a>
                 <a class="quick-link" href="familias.php">Trocar família <span>→</span></a>
             </section>
             <section class="surface quick-card" style="margin-top:14px">

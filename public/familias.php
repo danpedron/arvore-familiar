@@ -130,6 +130,11 @@ foreach ($familias as $familia) {
         break;
     }
 }
+$conviteUrl = 'https://arvore.pedron.com.br/registro.php?utm_source=convite&utm_medium=compartilhamento&utm_campaign=arvore_familiar';
+$conviteTexto = 'Estou organizando a história da nossa família na Árvore Familiar. Crie sua conta e me avise para que eu possa compartilhar nosso espaço com você: ' . $conviteUrl;
+$conviteWhatsappUrl = 'https://wa.me/?text=' . rawurlencode($conviteTexto);
+$conviteEmailUrl = 'mailto:?subject=' . rawurlencode('Vamos preservar a história da nossa família') . '&body=' . rawurlencode($conviteTexto);
+
 $membros = [];
 $referencias = [];
 $pessoasDisponiveisReferencia = [];
@@ -169,7 +174,7 @@ if ($familiaSelecionada) {
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=community-1">
+    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=seo-growth-1">
 </head>
 <body>
 <header class="topo"><a class="brand" href="index.php">Árvore Familiar</a><nav><a href="index.php">Painel</a><a href="arvore.php">Explorar árvore</a><a href="familias.php" aria-current="page">Famílias</a><span class="user-chip"><?= htmlspecialchars(usuarioAtualNome() ?: '') ?></span><a href="logout.php">Sair</a></nav></header>
@@ -177,6 +182,12 @@ if ($familiaSelecionada) {
     <div class="page-heading"><div><span class="eyebrow">Comunidade genealógica</span><h1>Espaços da família</h1><p class="lead">Todos os espaços são visíveis para a comunidade. Você pode explorar qualquer árvore e incluir pessoas existentes sem recadastrar ninguém.</p></div><?php if ($familiaSelecionada && usuarioPodeEditar()): ?><a class="btn" href="#referenciar-pessoa">＋ Incluir pessoa existente</a><?php endif; ?></div>
     <?php if ($mensagem): ?><div class="sucesso" style="margin-bottom:18px"><?= htmlspecialchars($mensagem) ?></div><?php endif; ?>
     <?php if ($erro): ?><div class="erro" style="margin-bottom:18px"><?= htmlspecialchars($erro) ?></div><?php endif; ?>
+    <?php if ($familiaSelecionada && usuarioPodeEditar()): ?>
+    <section class="invite-panel" aria-labelledby="convite-titulo">
+        <div><span class="eyebrow">Convide a família</span><h2 id="convite-titulo">Uma pessoa conhece uma data. Outra guarda uma foto.</h2><p>Envie este convite para trazer parentes à Árvore Familiar. Depois que criarem a conta, você poderá compartilhar o espaço e construir a história em conjunto.</p></div>
+        <div class="invite-actions"><a class="btn" href="<?= htmlspecialchars($conviteWhatsappUrl) ?>" target="_blank" rel="noopener">Enviar por WhatsApp</a><a class="btn btn-secundario" href="<?= htmlspecialchars($conviteEmailUrl) ?>">Enviar por e-mail</a><button class="btn btn-ghost invite-copy" type="button" data-invite-url="<?= htmlspecialchars($conviteUrl) ?>">Copiar link de convite</button></div>
+    </section>
+    <?php endif; ?>
     <section class="family-grid">
         <?php foreach ($familias as $familia): ?>
             <article class="surface family-card <?= (int) $familia['id'] === (int) $familiaSelecionada ? 'is-active' : '' ?>">
@@ -208,4 +219,20 @@ if ($familiaSelecionada) {
     <?php endif; ?>
     <?php endif; ?>
 </main>
+<script>
+(() => {
+    const button = document.querySelector('.invite-copy');
+    if (!button) return;
+    const original = button.textContent;
+    button.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(button.dataset.inviteUrl || '');
+            button.textContent = 'Link copiado';
+            window.setTimeout(() => { button.textContent = original; }, 2200);
+        } catch (_) {
+            window.prompt('Copie o link de convite:', button.dataset.inviteUrl || '');
+        }
+    });
+})();
+</script>
 </body></html>

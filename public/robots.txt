@@ -1,0 +1,55 @@
+User-agent: *
+Allow: /
+Disallow: /arvore.php
+Disallow: /arvore_dados.php
+Disallow: /arvore_editar.php
+Disallow: /arvore_salvar.php
+Disallow: /arvore_pdf.php
+Disallow: /arvore_seguir.php
+Disallow: /familias.php
+Disallow: /pessoa.php
+Disallow: /pessoa_editar.php
+Disallow: /pessoas_comunidade.php
+Disallow: /importar.php
+Disallow: /importar_processar.php
+Disallow: /geocodificar.php
+Disallow: /logout.php
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /arvore.php
+Disallow: /arvore_dados.php
+Disallow: /arvore_editar.php
+Disallow: /arvore_salvar.php
+Disallow: /arvore_pdf.php
+Disallow: /arvore_seguir.php
+Disallow: /familias.php
+Disallow: /pessoa.php
+Disallow: /pessoa_editar.php
+Disallow: /pessoas_comunidade.php
+Disallow: /importar.php
+Disallow: /importar_processar.php
+Disallow: /geocodificar.php
+Disallow: /logout.php
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /arvore.php
+Disallow: /arvore_dados.php
+Disallow: /arvore_editar.php
+Disallow: /arvore_salvar.php
+Disallow: /arvore_pdf.php
+Disallow: /arvore_seguir.php
+Disallow: /familias.php
+Disallow: /pessoa.php
+Disallow: /pessoa_editar.php
+Disallow: /pessoas_comunidade.php
+Disallow: /importar.php
+Disallow: /importar_processar.php
+Disallow: /geocodificar.php
+Disallow: /logout.php
+
+Sitemap: https://arvore.pedron.com.br/sitemap.xml
