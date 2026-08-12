@@ -129,7 +129,7 @@
     chart
       .setTransitionTime(260)
       .setOrientationVertical()
-      .setCardXSpacing(88)
+      .setCardXSpacing(292)
       .setCardYSpacing(250)
       .setAncestryDepth(ancestry)
       .setProgenyDepth(progeny)
