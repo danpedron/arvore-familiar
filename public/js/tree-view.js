@@ -384,8 +384,8 @@
       const unionLayer = document.createElementNS(SVG_NS, 'g'); unionLayer.classList.add('tree-union-layer');
       this.links.append(parentLayer, unionLayer);
       const drawn = new Set();
-      const familyAnchor = (group) => {
-        const members = group.members
+      const familyAnchor = (parentIds) => {
+        const members = parentIds
           .map((id) => ({ id, position: this.positions.get(id) }))
           .filter((item) => item.position)
           .sort((a, b) => a.position.x - b.position.x);
@@ -393,39 +393,53 @@
         const left = members[0].position;
         const right = members[members.length - 1].position;
         return {
-          // O ponto de saída é o centro da união visível, não o centro de uma subárvore.
+          // O ponto de saída é o centro do casal registrado como progenitor do filho.
           x: members.length === 1 ? left.x + CARD.width / 2 : (left.x + CARD.width + right.x) / 2,
           bottom: Math.max(...members.map((item) => item.position.y + CARD.height)),
         };
       };
-      const connectorGroups = [...this.graph.groupsById.values()]
-        .filter((group) => group.children.size)
-        .map((group) => ({ group, anchor: familyAnchor(group) }))
-        .filter((item) => item.anchor)
-        .sort((a, b) => a.group.generation - b.group.generation || a.anchor.x - b.anchor.x);
+      const familiesByParents = new Map();
+      this.visibleIds.forEach((childId) => {
+        const child = this.byId.get(childId);
+        if (!child || !this.positions.has(childId)) return;
+        const parentIds = [...new Set((child.parents || []).map(String))]
+          .filter((parentId) => this.visibleIds.has(parentId) && this.positions.has(parentId))
+          .sort((a, b) => (this.positions.get(a)?.x || 0) - (this.positions.get(b)?.x || 0));
+        if (!parentIds.length) return;
+        const key = parentIds.join(':');
+        if (!familiesByParents.has(key)) {
+          familiesByParents.set(key, {
+            id: key,
+            parentIds,
+            childIds: [],
+            generation: Math.min(...parentIds.map((parentId) => this.graph.generation.get(parentId) ?? 0)),
+          });
+        }
+        familiesByParents.get(key).childIds.push(childId);
+      });
+      const connectorFamilies = [...familiesByParents.values()]
+        .map((family) => ({ ...family, anchor: familyAnchor(family.parentIds) }))
+        .filter((family) => family.anchor)
+        .sort((a, b) => a.generation - b.generation || a.anchor.x - b.anchor.x);
       const lanesByGeneration = new Map();
-      connectorGroups.forEach((item) => {
-        const level = item.group.generation;
-        if (!lanesByGeneration.has(level)) lanesByGeneration.set(level, []);
-        lanesByGeneration.get(level).push(item.group.id);
+      connectorFamilies.forEach((family) => {
+        if (!lanesByGeneration.has(family.generation)) lanesByGeneration.set(family.generation, []);
+        lanesByGeneration.get(family.generation).push(family.id);
       });
       const laneIndex = new Map();
       lanesByGeneration.forEach((ids) => ids.forEach((id, index) => laneIndex.set(id, { index, count: ids.length })));
 
-      connectorGroups.forEach(({ group, anchor: parent }) => {
-        const childIds = [...new Set(group.members.flatMap((memberId) => this.byId.get(memberId)?.children || []))]
-          .map(String)
-          .filter((childId) => this.visibleIds.has(childId) && this.graph.groupByPerson.get(childId) !== group.id && this.positions.has(childId))
-          .sort((a, b) => (this.positions.get(a)?.x || 0) - (this.positions.get(b)?.x || 0));
-        if (!childIds.length) return;
-        const children = childIds.map((id) => {
-          const position = this.positions.get(id);
-          return { x: position.x + CARD.width / 2, top: position.y };
-        });
+      connectorFamilies.forEach(({ id, parentIds, childIds, anchor: parent }) => {
+        const children = childIds
+          .map((childId) => ({ id: childId, position: this.positions.get(childId) }))
+          .filter((child) => child.position)
+          .sort((a, b) => a.position.x - b.position.x)
+          .map((child) => ({ x: child.position.x + CARD.width / 2, top: child.position.y }));
+        if (!children.length) return;
         const childTop = Math.min(...children.map((child) => child.top));
         const corridor = childTop - parent.bottom;
         if (corridor < 24) return;
-        const lane = laneIndex.get(group.id) || { index: 0, count: 1 };
+        const lane = laneIndex.get(id) || { index: 0, count: 1 };
         // Casais na mesma geração usam faixas diferentes no espaço vertical entre gerações.
         const laneOffset = 34 + ((lane.index + 1) / (lane.count + 1)) * Math.max(22, corridor - 76);
         const railY = Math.min(childTop - 28, parent.bottom + laneOffset);
@@ -435,7 +449,7 @@
         if (railEnd > railStart) path += ` M ${railStart} ${railY} H ${railEnd}`;
         children.forEach((child) => { path += ` M ${child.x} ${railY} V ${child.top}`; });
         const connector = this.path(path, 'tree-link tree-link-parent tree-link-family');
-        connector.dataset.parentIds = group.members.join(',');
+        connector.dataset.parentIds = parentIds.join(',');
         connector.dataset.childIds = childIds.join(',');
         parentLayer.append(connector);
       });

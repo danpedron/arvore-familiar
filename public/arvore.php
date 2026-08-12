@@ -152,7 +152,7 @@ $seguidas = $seguidasStmt->fetchAll();
     </form>
 </dialog>
 
-<script src="js/tree-view.js?v=connectors-2"></script>
+<script src="js/tree-view.js?v=connectors-3"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const tree = new FamilyTreeView({
