@@ -130,10 +130,10 @@
       .setTransitionTime(260)
       .setOrientationVertical()
       .setCardXSpacing(292)
-      .setCardYSpacing(250)
+      .setCardYSpacing(this.modeValue === 'fan' ? 292 : 250)
       .setAncestryDepth(ancestry)
       .setProgenyDepth(progeny)
-      .setShowSiblingsOfMain(this.modeValue !== 'lineage')
+      .setShowSiblingsOfMain(this.modeValue === 'explorer')
       .setSortChildrenFunction((left, right) => view.familyChartSort(left, right))
       .setSortSpousesFunction((datum, data) => [...(datum.rels?.spouses || [])].sort((leftId, rightId) => {
         const left = data.find((item) => String(item.id) === String(leftId));
@@ -147,22 +147,18 @@
         view.updateFamilyChartZoomLabel();
       });
 
+    if (this.modeValue === 'fan') chart.setOrientationHorizontal();
     this.familyChart = chart;
     chart.updateMainId(String(this.focusId));
     chart.updateTree({
       initial: true,
-      tree_position: options.center ? 'main_to_middle' : 'fit',
+      tree_position: 'main_to_middle',
       transition_time: 0,
     });
     this.updatePanel();
   };
 
   BaseTreeView.prototype.render = function render(options = {}) {
-    if (this.modeValue === 'fan') {
-      this.familyChart = null;
-      if (this.stage) this.stage.className = 'tree-stage tree-mode-fan';
-      return legacyRender.call(this, options);
-    }
     return this.renderWithFamilyChart(options);
   };
 

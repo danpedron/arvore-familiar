@@ -156,7 +156,7 @@ $seguidas = $seguidasStmt->fetchAll();
 <script src="vendor/family-chart/d3.min.js?v=7.9.0"></script>
 <script src="vendor/family-chart/family-chart.min.js?v=0.9.0"></script>
 <script src="js/tree-view.js?v=family-chart-1"></script>
-<script src="js/tree-view-family-chart.js?v=family-chart-2"></script>
+<script src="js/tree-view-family-chart.js?v=family-chart-3"></script>
 <script>
 window.addEventListener('DOMContentLoaded', () => {
   const tree = new FamilyTreeView({
