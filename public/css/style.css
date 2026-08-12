@@ -303,10 +303,10 @@ form label { display: block; margin-top: 15px; color: #425149; font-size: 13px; 
 
 /* Explorer visual — inspired family tree workspace */
 :root { --explorer-bg:#f4f5f6; --explorer-line:#cfd3d6; --explorer-ink:#2f3437; --explorer-muted:#6f777d; --explorer-orange:#d86d26; --explorer-blue:#2d9cab; --explorer-rose:#db8b9a; }
-body.tree-page-body { background:var(--explorer-bg); color:var(--explorer-ink); }
+body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:var(--explorer-bg); color:var(--explorer-ink); }
 .tree-topbar { height:62px; padding:0 28px; background:#fff; border-bottom:1px solid #e5e6e7; }
 .tree-topbar nav { gap:22px; }
-.heritage-explorer { min-height:calc(100vh - 62px); display:flex; flex-direction:column; background:#f5f6f7; }
+.heritage-explorer { height:calc(100dvh - 62px); min-height:0; display:flex; flex-direction:column; background:#f5f6f7; }
 .explorer-breadcrumb { min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:0 28px; background:#fff; border-bottom:1px solid #e1e3e4; }
 .explorer-family-title { display:flex; align-items:center; gap:9px; min-width:0; font-size:13px; color:#5e656a; }
 .explorer-family-title strong { color:#343a3d; white-space:nowrap; }
@@ -315,7 +315,7 @@ body.tree-page-body { background:var(--explorer-bg); color:var(--explorer-ink); 
 .explorer-header-actions { display:flex; align-items:center; gap:8px; }
 .header-action { border:0; border-radius:6px; background:transparent; color:#555d62; padding:8px 11px; cursor:pointer; font-size:12px; font-weight:700; }
 .header-action:hover { background:#f1f2f3; color:#252b2e; }
-.explorer-layout { flex:1; min-height:0; display:grid; grid-template-columns:312px minmax(0,1fr); }
+.explorer-layout { flex:1 1 auto; min-height:0; height:0; display:grid; grid-template-columns:312px minmax(0,1fr); }
 .heritage-sidebar { position:relative; z-index:3; overflow:auto; min-height:0; background:#fff; border-right:1px solid #dfe2e4; box-shadow:2px 0 10px rgba(32,39,42,.04); transition:transform .18s ease, margin-left .18s ease; }
 .tree-panel-closed .heritage-sidebar { transform:translateX(-100%); margin-left:-312px; }
 .sidebar-person-head { display:flex; gap:14px; padding:26px 22px 20px; }
@@ -342,7 +342,7 @@ body.tree-page-body { background:var(--explorer-bg); color:var(--explorer-ink); 
 .sidebar-tip { margin:18px 20px 24px; padding:12px 13px; border-radius:7px; background:#fff8ee; color:#7d6d5e; font-size:11px; line-height:1.45; }
 .sidebar-tip strong { display:block; margin-bottom:4px; color:#a56f34; }
 .sidebar-tip p { margin:0; }
-.explorer-workspace { min-width:0; min-height:0; display:flex; flex-direction:column; }
+.explorer-workspace { min-width:0; min-height:0; height:100%; display:flex; flex-direction:column; }
 .explorer-toolbar { min-height:58px; display:flex; align-items:center; gap:10px; padding:9px 18px; background:#fff; border-bottom:1px solid #e2e4e5; }
 .explorer-search { position:relative; display:flex; align-items:center; flex:1; max-width:360px; min-width:180px; height:36px; border:1px solid #d7dcde; border-radius:6px; background:#fafbfb; }
 .explorer-search > span { padding:0 10px; color:#92999c; font-size:18px; }
@@ -351,7 +351,7 @@ body.tree-page-body { background:var(--explorer-bg); color:var(--explorer-ink); 
 .toolbar-select select { height:34px; width:auto; min-width:116px; margin:0; border:1px solid #d7dcde; border-radius:5px; background:#fff; color:#555e63; font-size:12px; text-transform:none; }
 .toolbar-icon,.zoom-button { width:34px; height:34px; border:1px solid #d7dcde; border-radius:5px; background:#fff; color:#5a6267; cursor:pointer; font-size:17px; }
 .toolbar-icon:hover,.zoom-button:hover { background:#f0f6f7; color:#247984; }
-.explorer-canvas { position:relative; flex:1; min-height:480px; overflow:hidden; background-color:#f3f4f4; background-image:radial-gradient(#d6dadd 1px,transparent 1px); background-size:19px 19px; cursor:grab; touch-action:none; }
+.explorer-canvas { position:relative; flex:1 1 auto; min-height:0; overflow:hidden; background-color:#f3f4f4; background-image:radial-gradient(#d6dadd 1px,transparent 1px); background-size:19px 19px; cursor:grab; touch-action:none; }
 .explorer-canvas.is-panning { cursor:grabbing; }
 .tree-stage { position:absolute; left:0; top:0; transform-origin:0 0; }
 .tree-world { position:relative; transform-origin:0 0; }

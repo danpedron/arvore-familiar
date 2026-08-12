@@ -333,6 +333,56 @@
       placeGroup(baseGroupId, centerX - baseWidth / 2, baseY);
       placeDown(baseGroupId, centerX - downWidth / 2, baseY);
       placeUp(baseGroupId, centerX - upWidth / 2, baseY);
+
+      // Um grupo conjugal pode receber ancestrais por mais de um membro (por exemplo,
+      // Clara e Dorcino). O primeiro percurso já posiciona um dos ramos; este segundo
+      // passo posiciona os demais casais progenitores que apontam para grupos existentes.
+      const placedIntervals = (y) => [...graph.groupsById.values()]
+        .filter((group) => placedGroups.has(group.id))
+        .map((group) => group.members.map((id) => positions.get(id)).filter(Boolean))
+        .filter((members) => members.length && members.some((position) => Math.abs(position.y - y) < 1))
+        .map((members) => ({
+          left: Math.min(...members.map((position) => position.x)),
+          right: Math.max(...members.map((position) => position.x + CARD.width)),
+        }));
+      const placeRemainingParentBranches = () => {
+        let passes = 0;
+        while (passes < graph.groupsById.size) {
+          passes += 1;
+          const candidates = ordered([...graph.groupsById.keys()].filter((groupId) => {
+            if (placedGroups.has(groupId)) return false;
+            const group = graph.groupsById.get(groupId);
+            return [...(group?.children || [])].some((childGroupId) => placedGroups.has(childGroupId));
+          }));
+          if (!candidates.length) break;
+          candidates.forEach((groupId) => {
+            const group = graph.groupsById.get(groupId); if (!group) return;
+            const childPositions = [...group.children]
+              .flatMap((childGroupId) => graph.groupsById.get(childGroupId)?.members || [])
+              .map((childId) => positions.get(childId))
+              .filter(Boolean);
+            if (!childPositions.length) return;
+            const y = Math.min(...childPositions.map((position) => position.y)) - ROW_GAP;
+            const desiredCenter = childPositions.reduce((sum, position) => sum + position.x + CARD.width / 2, 0) / childPositions.length;
+            const width = groupWidth(groupId);
+            const intervals = placedIntervals(y);
+            let left = desiredCenter - width / 2;
+            let guard = 0;
+            while (guard < intervals.length + 2) {
+              guard += 1;
+              const conflict = intervals.find((interval) => left < interval.right + BRANCH_GAP / 2 && left + width > interval.left - BRANCH_GAP / 2);
+              if (!conflict) break;
+              const placeLeft = conflict.left - width - BRANCH_GAP;
+              const placeRight = conflict.right + BRANCH_GAP;
+              left = Math.abs(placeLeft - (desiredCenter - width / 2)) <= Math.abs(placeRight - (desiredCenter - width / 2)) ? placeLeft : placeRight;
+            }
+            placeGroup(groupId, left, y);
+            placeUp(groupId, left, y);
+            placeDown(groupId, left, y);
+          });
+        }
+      };
+      placeRemainingParentBranches();
       this.normalizePositions(positions);
       return positions;
     }
