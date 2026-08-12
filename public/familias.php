@@ -36,6 +36,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             registrarAuditoria('familia', $id, 'criacao', ['nome' => $nome]);
             $mensagem = 'Novo espaço criado. Você já pode adicionar pessoas e compartilhar o acesso.';
         }
+        if ($acao === 'atualizar') {
+            if (!usuarioPodeAdministrarFamilia()) throw new RuntimeException('Somente o responsável pelo espaço pode alterar sua identificação.');
+            $id = familiaAtualId();
+            $nome = trim($_POST['nome'] ?? '');
+            $descricao = trim($_POST['descricao'] ?? '');
+            if (!$id) throw new RuntimeException('Selecione um espaço antes de editá-lo.');
+            if (mb_strlen($nome) < 3 || mb_strlen($nome) > 180) throw new RuntimeException('Informe um nome entre 3 e 180 caracteres.');
+            if (mb_strlen($descricao) > 500) throw new RuntimeException('A descrição pode ter no máximo 500 caracteres.');
+            $stmt = $pdo->prepare('UPDATE familias SET nome = ?, descricao = ? WHERE id = ?');
+            $stmt->execute([$nome, $descricao ?: null, $id]);
+            atualizarContextoFamilia($id);
+            registrarAuditoria('familia', $id, 'identificacao_atualizada', ['nome' => $nome]);
+            $mensagem = 'Nome e descrição do espaço atualizados.';
+        }
         if ($acao === 'convidar') {
             if (!usuarioPodeAdministrarFamilia()) throw new RuntimeException('Somente o responsável pelo espaço pode gerenciar membros.');
             $email = strtolower(trim($_POST['email'] ?? ''));
@@ -69,6 +83,13 @@ if (!$familias && !empty($_SESSION['usuario_id'])) {
     $erro = $erro ?: 'Execute a migração 005 no banco para habilitar espaços de família.';
 }
 $familiaSelecionada = familiaAtualId();
+$familiaAtiva = null;
+foreach ($familias as $familia) {
+    if ((int) $familia['id'] === (int) $familiaSelecionada) {
+        $familiaAtiva = $familia;
+        break;
+    }
+}
 $membros = [];
 if ($familiaSelecionada) {
     $stmt = $pdo->prepare('SELECT u.id, u.nome, u.email, fu.papel, fu.criado_em FROM usuarios u JOIN familia_usuarios fu ON fu.usuario_id = u.id WHERE fu.familia_id = ? ORDER BY FIELD(fu.papel, "owner", "editor", "viewer"), u.nome');
@@ -80,7 +101,7 @@ if ($familiaSelecionada) {
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=tree-controls-1">
+    <title>Famílias · Árvore Familiar</title><link rel="stylesheet" href="css/style.css?v=family-settings-1">
 </head>
 <body>
 <header class="topo"><a class="brand" href="index.php">Árvore Familiar</a><nav><a href="index.php">Painel</a><a href="arvore.php">Explorar árvore</a><a href="familias.php" aria-current="page">Famílias</a><span class="user-chip"><?= htmlspecialchars(usuarioAtualNome() ?: '') ?></span><a href="logout.php">Sair</a></nav></header>
@@ -100,6 +121,9 @@ if ($familiaSelecionada) {
     </section>
 
     <?php if ($familiaSelecionada && usuarioPodeAdministrarFamilia()): ?>
+    <section class="surface panel" style="margin-top:22px"><div class="panel-header"><div><h2>Identificação do espaço</h2><span class="muted small">O nome aparece na árvore, na seleção de famílias e nos convites. O endereço interno do espaço não é alterado.</span></div></div>
+        <form class="dashboard-layout" style="grid-template-columns:minmax(220px,1fr) minmax(220px,1.4fr) 150px;gap:10px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="atualizar"><label>Nome do espaço<input name="nome" required minlength="3" maxlength="180" value="<?= htmlspecialchars($familiaAtiva['nome'] ?? '') ?>"></label><label>Descrição <span class="muted">(opcional)</span><input name="descricao" maxlength="500" value="<?= htmlspecialchars($familiaAtiva['descricao'] ?? '') ?>" placeholder="Ex.: Descendentes de Antônio Pedron"></label><div style="display:flex;align-items:flex-end"><button class="btn" type="submit">Salvar nome</button></div></form>
+    </section>
     <section class="surface panel" style="margin-top:22px"><div class="panel-header"><div><h2>Membros de <?= htmlspecialchars(familiaAtualNome() ?: 'espaço') ?></h2><span class="muted small">O papel define se a pessoa pode apenas visualizar ou também editar.</span></div></div>
         <form class="dashboard-layout" style="grid-template-columns: minmax(0,1fr) 180px 130px; gap:10px; margin-bottom:18px" method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="convidar"><input type="email" name="email" placeholder="E-mail da conta" required><select name="papel"><option value="viewer">Visualizador</option><option value="editor">Editor</option></select><button class="btn" type="submit">Compartilhar</button></form>
         <?php foreach ($membros as $membro): ?><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)"><div><strong><?= htmlspecialchars($membro['nome']) ?></strong><div class="muted small"><?= htmlspecialchars($membro['email']) ?></div></div><div style="display:flex;align-items:center;gap:12px"><span class="role" style="color:var(--brand);font-size:12px;font-weight:800"><?= htmlspecialchars($membro['papel']) ?></span><?php if ((int) $membro['id'] !== (int) usuarioAtualId()): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(tokenCsrf()) ?>"><input type="hidden" name="acao" value="remover_membro"><input type="hidden" name="usuario_id" value="<?= (int) $membro['id'] ?>"><button class="btn btn-ghost btn-small" type="submit">Remover</button></form><?php endif; ?></div></div><?php endforeach; ?>
