@@ -426,3 +426,42 @@ body.tree-page-body { height:100dvh; min-height:0; overflow:hidden; background:v
 .tree-link-family { stroke:#6d9ca1; stroke-width:3.5; filter:drop-shadow(0 1px 0 rgba(255,255,255,.82)); }
 .tree-link-parent { stroke:#6d9ca1; stroke-width:3.5; }
 .tree-world { min-width:100%; min-height:100%; }
+
+/* Family Chart renderer — geometry is provided by the library; this layer owns the product visual. */
+.tree-stage-family-chart { position:absolute; inset:0; width:100%; height:100%; min-width:0; min-height:0; overflow:hidden; --female-color:#d8788a; --male-color:#269bab; --genderless-color:#879399; --background-color:transparent; --text-color:#283236; font-family:inherit; }
+.tree-stage-family-chart.f3.f3-cont { width:100%; height:100%; max-height:none; display:block; background:transparent; color:#283236; }
+.tree-stage-family-chart #f3Canvas { width:100% !important; height:100% !important; }
+.tree-stage-family-chart .f3-nav-cont { display:none; }
+.tree-stage-family-chart svg.main_svg { overflow:visible; }
+.tree-stage-family-chart svg .link { fill:none; stroke:#6d9ca1; stroke-width:3.2px; stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 1px 0 rgba(255,255,255,.88)); }
+.tree-stage-family-chart svg .link.spouse, .tree-stage-family-chart svg .link-spouse { stroke:#c6a06a; stroke-width:2.8px; }
+.tree-stage-family-chart .card_cont { overflow:visible !important; }
+.tree-stage-family-chart .card { overflow:visible; background:transparent; box-shadow:none; cursor:pointer; }
+.tree-stage-family-chart .card-inner { position:relative; width:242px; height:120px; }
+.fc-person-card { --fc-accent:#879399; position:relative; display:flex; align-items:center; gap:12px; width:242px; height:120px; overflow:hidden; box-sizing:border-box; padding:18px 27px 13px 13px; border:1px solid #d2d9da; border-radius:10px; background:#fff; box-shadow:0 3px 11px rgba(48,57,61,.16); color:#283236; text-align:left; transition:box-shadow .16s ease, transform .16s ease, border-color .16s ease; }
+.fc-person-card:hover { z-index:6; box-shadow:0 10px 24px rgba(48,57,61,.23); transform:translateY(-2px); }
+.fc-person-male { --fc-accent:#269bab; border-color:#a8d7dd; }
+.fc-person-female { --fc-accent:#d8788a; border-color:#efb4be; }
+.fc-person-neutral { --fc-accent:#879399; border-color:#d2d8da; }
+.fc-card-gender-band { position:absolute; inset:0 0 auto; height:5px; background:var(--fc-accent); }
+.fc-person-card.is-focus { border-color:var(--fc-accent); box-shadow:0 0 0 5px color-mix(in srgb,var(--fc-accent) 19%,transparent),0 8px 22px rgba(48,57,61,.24); }
+.fc-person-card.is-former { border-style:dashed; background:#fffdfb; }
+.fc-person-card.is-deceased { background:#fbfcfc; }
+.fc-person-avatar { flex:0 0 auto; width:58px; height:58px; border:2px solid #fff; border-radius:50%; object-fit:cover; background:#e5e9e9; box-shadow:0 1px 5px rgba(32,42,45,.2); }
+.fc-person-initials { display:grid; place-items:center; color:#fff; background:#96a2a5; font-size:23px; font-weight:800; }
+.fc-person-male .fc-person-initials { background:#54aab5; }
+.fc-person-female .fc-person-initials { background:#d68696; }
+.fc-person-card.is-deceased .fc-person-avatar { filter:grayscale(.58); }
+.fc-person-content { min-width:0; }
+.fc-person-content h3 { display:-webkit-box; overflow:hidden; margin:0; color:#263135; font-size:13px; font-weight:800; line-height:1.2; text-overflow:ellipsis; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.fc-person-content p { margin:6px 0 0; overflow:hidden; color:#556369; font-size:11px; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:.01em; text-overflow:ellipsis; white-space:nowrap; }
+.fc-person-content span { display:inline-flex; max-width:100%; margin-top:7px; overflow:hidden; border-radius:999px; padding:3px 6px; background:#f1f4f4; color:#6f7b80; font-size:9px; font-weight:800; line-height:1; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.fc-person-card.is-focus .fc-person-content span { background:#e3f3f4; color:#1c7884; }
+.fc-person-card.is-former .fc-person-content span { background:#fff1e8; color:#aa6d45; }
+.fc-card-edit { position:absolute; right:7px; bottom:7px; z-index:7; width:21px; height:21px; padding:0; border:0; border-radius:50%; background:#f4f7f7; color:#7f8b8f; cursor:pointer; font-size:14px; line-height:21px; }
+.fc-card-edit:hover { background:#e5f2f3; color:#247984; }
+.fc-former-badge { position:absolute; right:7px; top:10px; display:grid; place-items:center; width:22px; height:22px; border:2px solid #fff; border-radius:50%; background:#fff0e6; color:#ad6532; box-shadow:0 1px 3px rgba(0,0,0,.12); font-size:9px; font-weight:900; text-transform:uppercase; }
+.tree-stage-family-chart .card_cont .card-main-outline { stroke:transparent; }
+.tree-stage-family-chart .f3-path-to-main { filter:drop-shadow(0 0 3px rgba(38,155,171,.45)); }
+@media (max-width:900px) { .fc-person-card { width:214px; height:108px; padding-right:24px; } .tree-stage-family-chart .card-inner { width:214px; height:108px; } .fc-person-avatar { width:50px; height:50px; } }
+@media print { .tree-stage-family-chart { position:relative; height:900px; overflow:visible; } .tree-stage-family-chart.f3.f3-cont { height:900px; } }
