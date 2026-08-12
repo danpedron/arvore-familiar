@@ -298,8 +298,10 @@
         });
         group._renderWidth = width;
       };
-      const placeDown = (groupId, left, y) => {
+      const placeDown = (groupId, left, y, path = new Set()) => {
+        if (path.has(groupId)) return;
         const group = graph.groupsById.get(groupId); if (!group) return;
+        const nextPath = new Set(path).add(groupId);
         const linked = ordered(group.children);
         const total = linked.reduce((sum, childId) => sum + measure(childId, 1), 0) + Math.max(0, linked.length - 1) * BRANCH_GAP;
         let cursor = left + Math.max(0, (measure(groupId, 1) - total) / 2);
@@ -307,12 +309,14 @@
           const childWidth = measure(childId, 1);
           const childGroupWidth = groupWidth(childId);
           placeGroup(childId, cursor + (childWidth - childGroupWidth) / 2, y + ROW_GAP);
-          placeDown(childId, cursor, y + ROW_GAP);
+          placeDown(childId, cursor, y + ROW_GAP, nextPath);
           cursor += childWidth + BRANCH_GAP;
         });
       };
-      const placeUp = (groupId, left, y) => {
+      const placeUp = (groupId, left, y, path = new Set()) => {
+        if (path.has(groupId)) return;
         const group = graph.groupsById.get(groupId); if (!group) return;
+        const nextPath = new Set(path).add(groupId);
         const linked = ordered(group.parents);
         const total = linked.reduce((sum, parentId) => sum + measure(parentId, -1), 0) + Math.max(0, linked.length - 1) * BRANCH_GAP;
         let cursor = left + Math.max(0, (measure(groupId, -1) - total) / 2);
@@ -320,7 +324,7 @@
           const parentWidth = measure(parentId, -1);
           const parentGroupWidth = groupWidth(parentId);
           placeGroup(parentId, cursor + (parentWidth - parentGroupWidth) / 2, y - ROW_GAP);
-          placeUp(parentId, cursor, y - ROW_GAP);
+          placeUp(parentId, cursor, y - ROW_GAP, nextPath);
           cursor += parentWidth + BRANCH_GAP;
         });
       };
