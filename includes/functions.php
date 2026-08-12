@@ -318,19 +318,39 @@ function listarConjuges(int $pessoaId): array {
     return $stmt->fetchAll();
 }
 
-function removerUniao(int $uniaoId): void {
+function obterUniaoEditavel(int $uniaoId): ?array {
     $pdo = getConexao();
     $familiaId = contextoFamiliaId();
-    $stmt = $pdo->prepare('DELETE FROM unioes WHERE id = ? AND pessoa1_id IN (SELECT id FROM pessoas WHERE familia_id = ?) AND pessoa2_id IN (SELECT id FROM pessoas WHERE familia_id = ?)');
-    $stmt->execute([$uniaoId, $familiaId, $familiaId]);
+    $stmt = $pdo->prepare(
+        'SELECT u.id, u.pessoa1_id, u.pessoa2_id
+         FROM unioes u
+         JOIN familia_pessoas fp1 ON fp1.pessoa_id = u.pessoa1_id AND fp1.familia_id = ?
+         JOIN familia_pessoas fp2 ON fp2.pessoa_id = u.pessoa2_id AND fp2.familia_id = ?
+         WHERE u.id = ?'
+    );
+    $stmt->execute([$familiaId, $familiaId, $uniaoId]);
+    $uniao = $stmt->fetch();
+    if (!$uniao) return null;
+    exigirPessoaEditavel((int) $uniao['pessoa1_id']);
+    exigirPessoaEditavel((int) $uniao['pessoa2_id']);
+    return $uniao;
+}
+
+function removerUniao(int $uniaoId): void {
+    $pdo = getConexao();
+    $uniao = obterUniaoEditavel($uniaoId);
+    if (!$uniao) return;
+    $stmt = $pdo->prepare('DELETE FROM unioes WHERE id = ?');
+    $stmt->execute([$uniaoId]);
     registrarAuditoria('uniao', $uniaoId, 'exclusao');
 }
 
 function atualizarUniao(int $uniaoId, string $tipo, ?string $dataInicio, ?string $dataFim, string $status): void {
     $pdo = getConexao();
-    $familiaId = contextoFamiliaId();
-    $stmt = $pdo->prepare('UPDATE unioes SET tipo = ?, data_inicio = ?, data_fim = ?, status = ? WHERE id = ? AND pessoa1_id IN (SELECT id FROM pessoas WHERE familia_id = ?) AND pessoa2_id IN (SELECT id FROM pessoas WHERE familia_id = ?)');
-    $stmt->execute([$tipo, $dataInicio ?: null, $dataFim ?: null, $status, $uniaoId, $familiaId, $familiaId]);
+    $uniao = obterUniaoEditavel($uniaoId);
+    if (!$uniao) return;
+    $stmt = $pdo->prepare('UPDATE unioes SET tipo = ?, data_inicio = ?, data_fim = ?, status = ? WHERE id = ?');
+    $stmt->execute([$tipo, $dataInicio ?: null, $dataFim ?: null, $status, $uniaoId]);
     registrarAuditoria('uniao', $uniaoId, 'atualizacao');
 }
 
@@ -353,8 +373,17 @@ function listarNomesAdicionais(int $pessoaId): array {
 
 function removerNomeAdicional(int $nomeId): void {
     $pdo = getConexao();
-    $stmt = $pdo->prepare('DELETE FROM nomes_pessoa WHERE id = ? AND pessoa_id IN (SELECT id FROM pessoas WHERE familia_id = ?)');
-    $stmt->execute([$nomeId, contextoFamiliaId()]);
+    $stmt = $pdo->prepare(
+        'SELECT n.pessoa_id
+         FROM nomes_pessoa n
+         JOIN familia_pessoas fp ON fp.pessoa_id = n.pessoa_id AND fp.familia_id = ?
+         WHERE n.id = ?'
+    );
+    $stmt->execute([contextoFamiliaId(), $nomeId]);
+    $nome = $stmt->fetch();
+    if (!$nome) return;
+    exigirPessoaEditavel((int) $nome['pessoa_id']);
+    $pdo->prepare('DELETE FROM nomes_pessoa WHERE id = ?')->execute([$nomeId]);
     registrarAuditoria('nome_adicional', $nomeId, 'exclusao');
 }
 
